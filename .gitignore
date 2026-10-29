@@ -1,0 +1,9 @@
+.DS_Store
+node_modules/
+dist/
+*.tgz
+*.log
+.env
+.env.*
+.quickask-build-*/
+.swift-module-cache/

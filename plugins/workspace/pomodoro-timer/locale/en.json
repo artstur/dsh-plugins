@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Pomodoro Timer",
+    "description": "Runs a focus/break timer below the message composer and cycles 25-minute focus sessions with short and long breaks."
+  }
+}

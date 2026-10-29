@@ -1,0 +1,51 @@
+{
+  "name": "@local/chat-room",
+  "version": "1.10.0",
+  "private": true,
+  "type": "module",
+  "description": "Message list for the Harness Web UI: every installation owns one inbox topic, so an add code is simply its id — paste the other person's code and start chatting. The Host half bridges both DSH instances through a public relay, so people on different networks can talk without exposing a port or signing up.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./protocol": "./protocol.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "protocol.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "docs/*"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "license": "MIT",
+  "author": "ArtStur",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "chat",
+    "messenger"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/artstur/dsh-chat-room.git"
+  },
+  "homepage": "https://github.com/artstur/dsh-chat-room"
+}

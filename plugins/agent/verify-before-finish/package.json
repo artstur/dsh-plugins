@@ -1,0 +1,32 @@
+{
+  "name": "@local/verify-before-finish",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Adds a Verify-before-Finish stage to the default agent loop: a turn that changed files without verification evidence is sent back for one more step.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

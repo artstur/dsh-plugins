@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quick Ask",
+    "description": "Press Option+7 (or Cmd+Shift+7) on any page to summon a real input box styled like DSH's native composer. It sends the question together with the current page background into DSH and reveals the conversation with the answer."
+  }
+}

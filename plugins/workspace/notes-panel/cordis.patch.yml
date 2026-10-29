@@ -1,0 +1,3 @@
+- insert:
+    - id: notes-panel
+      name: '@local/notes-panel'

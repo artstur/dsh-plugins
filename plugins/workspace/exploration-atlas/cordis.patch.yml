@@ -1,0 +1,3 @@
+- insert:
+    - id: exploration-atlas
+      name: '@local/exploration-atlas'

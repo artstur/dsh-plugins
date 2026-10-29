@@ -1,0 +1,41 @@
+{
+  "name": "@local/exploration-atlas",
+  "version": "1.1.2",
+  "private": true,
+  "type": "module",
+  "description": "A clear system map of DSH exploration: six causal stages, seven capability dimensions, real evidence, and next experiments.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "exploration",
+    "atlas"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

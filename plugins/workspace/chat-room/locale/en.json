@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Messages",
+    "description": "A message list in the sidebar: paste the other person's add code and start chatting. Every installation owns one inbox topic, bridged by the Host half through a public relay, so two people on different networks can talk when both run DSH."
+  }
+}

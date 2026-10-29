@@ -1,0 +1,3 @@
+- insert:
+    - id: knowledge-context-reference
+      name: '@local/knowledge-context-reference'

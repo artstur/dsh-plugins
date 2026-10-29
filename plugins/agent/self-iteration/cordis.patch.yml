@@ -1,0 +1,9 @@
+# 自驱动迭代：Host 半边负责扫描「消息」、生成需求、驱动创造模式 Agent；
+# Client 半边负责侧边栏面板与笔记同步。
+- insert:
+    - id: self-iteration
+      name: '@local/self-iteration'
+      config:
+        enabled: true
+        autoIterate: true
+        agentPreset: cordis

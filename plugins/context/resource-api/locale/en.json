@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Device Resource API",
+    "description": "A unified interface over the content plugins keep on this machine: one resource.search and resource.read API over every registered Provider, so notes, transcripts and messages become one addressable space instead of one private store per plugin."
+  }
+}

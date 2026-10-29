@@ -1,0 +1,25 @@
+{
+  "name": "@local/access-auto-approval",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Automatically approves DSH access requests, delegating plugin removal to the user.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

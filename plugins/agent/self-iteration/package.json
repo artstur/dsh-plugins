@@ -1,0 +1,34 @@
+{
+  "name": "@local/self-iteration",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "description": "自驱动迭代：读取「消息」里收到的 DSH 插件反馈，自动生成迭代需求，用创造模式的主 Agent 完成迭代，并把迭代记录以「自驱动」来源写进对应插件的笔记。",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "logic.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

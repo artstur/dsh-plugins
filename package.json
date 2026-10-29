@@ -1,0 +1,14 @@
+{
+  "name": "dsh-plugins",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Celia's DeepSeek Harness plugin monorepo, organized by product role.",
+  "scripts": {
+    "test": "node scripts/test-all.mjs",
+    "catalog": "node scripts/test-all.mjs --catalog-only"
+  },
+  "workspaces": [
+    "plugins/*/*"
+  ]
+}
