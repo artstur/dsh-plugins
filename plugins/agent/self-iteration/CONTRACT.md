@@ -41,6 +41,7 @@ interface Snapshot {
   dryRun: boolean             // 试运行：只生成需求与提示词，不创建 Session
   agentPreset: string         // 默认 'cordis'（创造模式）
   scanIntervalMs: number     // 定时扫描间隔（毫秒）；0 = 关闭。默认 5000
+  watchActive: boolean       // 「消息」数据文件监听是否生效（新消息即时触发扫描）
   running: RunningIteration | null
   requirements: Requirement[] // 按 detectedAt 倒序，最新的在前；最多 100 条
   stats: {
@@ -121,6 +122,10 @@ Client 后台每 8 秒轮询 `state`；面板打开时每 4 秒轮询。Host 不
 > 需求来源：除「消息」里别人发来的消息外，用户在 **「我聊」（self chat，contact.self =
 > true）** 里写给自己的消息同样算需求来源——用户常把想法丢在这里，不能因为
 > `mine: true` 被过滤掉。
+>
+> 扫描触发：Host **监听「消息」的 state.json 文件变化**，新消息写入后约 0.3s（防抖）立即
+> 扫描一次；`scanIntervalMs` 的定时扫描保留为兜底（默认 5s，0 = 关闭）。`GET /state` 只读，
+> 只有「文件变化 / 定时器 / 手动 `scan`」三种入口会扫描。
 
 ## 2. Client 半边职责（`self-iteration/client.js`）
 

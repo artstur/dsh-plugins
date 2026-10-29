@@ -853,6 +853,24 @@ window.__ModuleLoader__.load({
       return null;
     }
 
+    /**
+     * Keeps a floating menu inside the viewport: clamp its anchor so the menu
+     * never runs off the right or bottom edge. Without a viewport (tests) the
+     * anchor is used as is, only never below zero.
+     */
+    function clampMenuPosition(x, y, viewport, size) {
+      const margin = 8;
+      const left = Math.max(0, Number(x) || 0);
+      const top = Math.max(0, Number(y) || 0);
+      const width = Number(viewport && viewport.width) || 0;
+      const height = Number(viewport && viewport.height) || 0;
+      if (!width || !height) return { left, top };
+      return {
+        left: Math.max(margin, Math.min(left, width - (Number(size && size.width) || 0) - margin)),
+        top: Math.max(margin, Math.min(top, height - (Number(size && size.height) || 0) - margin)),
+      };
+    }
+
     function updateDot(extra) {
       return h('span', {
         className: 'dsh-msg-update-dot' + (extra ? ' ' + extra : ''),
@@ -939,12 +957,11 @@ window.__ModuleLoader__.load({
       '.dsh-msg-rename{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--dsw-alias-label-secondary);opacity:0;transition:opacity .12s ease}',
       '.dsh-msg-row:hover .dsh-msg-rename,.dsh-msg-row:focus-within .dsh-msg-rename{opacity:1}',
       '.dsh-msg-row-time{font-size:10.5px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:0 0 auto}',
-      ".dsh-msg-pin{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;align-self:center;width:20px;height:20px;margin:-4px -4px -4px 0;border-radius:6px;color:var(--dsw-alias-label-secondary);opacity:0;cursor:pointer;transition:opacity .12s ease,color .12s ease,background-color .12s ease}",
-      '.dsh-msg-row:hover .dsh-msg-pin,.dsh-msg-row:focus-within .dsh-msg-pin{opacity:1}',
-      ".dsh-msg-pin[data-pinned='true']{opacity:1;color:var(--dsw-alias-brand-primary)}",
-      '.dsh-msg-pin:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}',
-      ".dsh-msg-pin[data-pinned='true']:hover{color:var(--dsw-alias-brand-primary)}",
-      '.dsh-msg-pin:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:0}',
+      '.dsh-msg-pinned{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;align-self:center;margin:-4px -4px -4px 0;color:var(--dsw-alias-brand-primary)}',
+      '.dsh-msg-menu{position:fixed;z-index:50;min-width:176px;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.16)}',
+      '.dsh-msg-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;text-align:left;cursor:pointer;white-space:nowrap}',
+      '.dsh-msg-menu-item:hover{background:var(--dsw-alias-bg-layer-2)}',
+      '.dsh-msg-menu-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}',
       '.dsh-msg-row-preview{font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dsh-msg-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--dsw-alias-state-error-primary);color:#fff;font-size:10.5px;font-weight:600;flex:0 0 auto}',
       '.dsh-msg-rail-foot{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:10px 16px;border-top:1px solid var(--dsw-alias-border-l1)}',
@@ -1063,6 +1080,9 @@ window.__ModuleLoader__.load({
       const [imageBusy, setImageBusy] = React.useState(false);
       const [search, setSearch] = React.useState('');
       const [overlay, setOverlay] = React.useState(null);
+      // A right-click on a row opens this little pin menu, anchored where the
+      // pointer was. Pin lives here instead of on a hover-only button.
+      const [rowMenu, setRowMenu] = React.useState(null);
       const [addCodeInput, setAddCodeInput] = React.useState('');
       const [addBusy, setAddBusy] = React.useState(false);
       const [formError, setFormError] = React.useState('');
@@ -1076,6 +1096,7 @@ window.__ModuleLoader__.load({
       const [updateBusy, setUpdateBusy] = React.useState(false);
       const [updateNotice, setUpdateNotice] = React.useState('');
       const messageListRef = React.useRef(null);
+      const menuRef = React.useRef(null);
       const copyTimer = React.useRef(null);
       const threadToken = React.useRef(0);
       const stateRef = React.useRef(null);
@@ -1092,6 +1113,42 @@ window.__ModuleLoader__.load({
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
       }, [overlay]);
+
+      // The row menu belongs to one right-click: any other click, Escape, a
+      // right-click elsewhere, a scroll or a resize closes it. Focus moves to
+      // the menu item so the Context-menu key and Shift+F10 work as well.
+      React.useEffect(() => {
+        if (!rowMenu) return undefined;
+        const menu = menuRef.current;
+        const item = menu ? menu.querySelector('[role="menuitem"]') : null;
+        if (item && typeof item.focus === 'function') item.focus({ preventScroll: true });
+        const close = (event) => {
+          const target = event && event.target;
+          // A click or right-click inside the menu leaves it open; every other
+          // target (window blur/resize carry none) closes it.
+          if (menu && target && typeof target.nodeType === 'number' && menu.contains(target)) {
+            // A right-click inside the menu must not open the browser menu.
+            if (event.type === 'contextmenu') event.preventDefault();
+            return;
+          }
+          setRowMenu(null);
+        };
+        const onKeyDown = (event) => {
+          if (event.key === 'Escape') setRowMenu(null);
+        };
+        document.addEventListener('mousedown', close, true);
+        document.addEventListener('contextmenu', close, true);
+        document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('resize', close);
+        window.addEventListener('blur', close);
+        return () => {
+          document.removeEventListener('mousedown', close, true);
+          document.removeEventListener('contextmenu', close, true);
+          document.removeEventListener('keydown', onKeyDown);
+          window.removeEventListener('resize', close);
+          window.removeEventListener('blur', close);
+        };
+      }, [rowMenu]);
 
       const applyState = React.useCallback((next) => {
         if (!next || typeof next !== 'object') return;
@@ -1362,17 +1419,89 @@ window.__ModuleLoader__.load({
       );
 
       // Pinning only changes where the row sits, never what it contains.
-      const togglePinned = React.useCallback(
-        async (contact) => {
-          if (!contact || contact.self) return;
-          const result = await post('/contacts/pin', {
-            id: contact.id,
-            pinned: !contact.pinned,
-          });
+      const setPinned = React.useCallback(
+        async (contactId, pinned) => {
+          const result = await post('/contacts/pin', { id: contactId, pinned });
           if (!result.ok) setSendError(result.detail || t('loadError'));
         },
         [post, t],
       );
+
+      // A right-click on a conversation opens the pin menu where the pointer
+      // is. "Chat with myself" is always first and needs no pin, so it keeps
+      // the browser menu; the Context-menu key reports no pointer position, so
+      // it falls back to the row itself.
+      const openRowMenu = React.useCallback(
+        (event, contact) => {
+          if (!contact || contact.self) return;
+          event.preventDefault();
+          event.stopPropagation();
+          let x = event.clientX;
+          let y = event.clientY;
+          if (!x && !y) {
+            const target = event.currentTarget || event.target;
+            const rect =
+              target && typeof target.getBoundingClientRect === 'function'
+                ? target.getBoundingClientRect()
+                : null;
+            if (rect) {
+              x = rect.left + 12;
+              y = rect.bottom;
+            }
+          }
+          setRowMenu({
+            id: contact.id,
+            pinned: contact.pinned === true,
+            name: contact.name || t('unnamed'),
+            x,
+            y,
+          });
+        },
+        [t],
+      );
+
+      // One row in a floating menu: the pin toggle, anchored at the click.
+      const renderRowMenu = () => {
+        if (!rowMenu) return null;
+        const viewport =
+          typeof window === 'undefined'
+            ? null
+            : { width: window.innerWidth, height: window.innerHeight };
+        const position = clampMenuPosition(rowMenu.x, rowMenu.y, viewport, {
+          width: 176,
+          height: 40,
+        });
+        return h(
+          'div',
+          {
+            className: 'dsh-msg-menu',
+            role: 'menu',
+            'aria-label': rowMenu.name,
+            ref: menuRef,
+            style: { left: position.left + 'px', top: position.top + 'px' },
+            onMouseDown: (event) => event.stopPropagation(),
+            onContextMenu: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            },
+          },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dsh-msg-menu-item',
+              role: 'menuitem',
+              onClick: () => {
+                const next = !rowMenu.pinned;
+                setRowMenu(null);
+                void setPinned(rowMenu.id, next);
+              },
+            },
+            pinGlyph(12),
+            rowMenu.pinned ? t('unpin') : t('pin'),
+          ),
+        );
+      };
 
       const handleSend = async () => {
         const text = draft.trim();
@@ -2185,7 +2314,7 @@ window.__ModuleLoader__.load({
           : null,
         h(
           'div',
-          { className: 'dsh-msg-list' },
+          { className: 'dsh-msg-list', onScroll: () => setRowMenu(null) },
           visible.length
             ? visible.map((contact) =>
                 h(
@@ -2197,6 +2326,15 @@ window.__ModuleLoader__.load({
                     'data-active': contact.id === activeId ? 'true' : 'false',
                     'aria-current': contact.id === activeId ? 'true' : undefined,
                     onClick: () => void openContact(contact.id),
+                    onContextMenu: (event) => openRowMenu(event, contact),
+                    // The keyboard context-menu key opens the same menu.
+                    onKeyDown: (event) => {
+                      if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) {
+                        return;
+                      }
+                      event.preventDefault();
+                      openRowMenu(event, contact);
+                    },
                   },
                   renderAvatar(contact),
                   h(
@@ -2230,32 +2368,20 @@ window.__ModuleLoader__.load({
                         { className: 'dsh-msg-row-time' },
                         contact.lastMessage ? shortTime(contact.lastMessage.at) : '',
                       ),
-                      // Notes to myself are always first, so they need no pin.
-                      contact.self
-                        ? null
-                        : h(
+                      // A pinned row keeps a small marker, but pinning itself
+                      // is on the row's right-click menu. Notes to myself are
+                      // always first, so they never carry a pin.
+                      contact.pinned && !contact.self
+                        ? h(
                             'span',
                             {
-                              className: 'dsh-msg-pin',
-                              role: 'button',
-                              tabIndex: 0,
-                              'data-pinned': contact.pinned ? 'true' : 'false',
-                              title: contact.pinned ? t('unpin') : t('pin'),
-                              'aria-label': contact.pinned ? t('unpin') : t('pin'),
-                              onClick: (event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                void togglePinned(contact);
-                              },
-                              onKeyDown: (event) => {
-                                if (event.key !== 'Enter' && event.key !== ' ') return;
-                                event.preventDefault();
-                                event.stopPropagation();
-                                void togglePinned(contact);
-                              },
+                              className: 'dsh-msg-pinned',
+                              title: t('pinned'),
+                              'aria-label': t('pinned'),
                             },
                             pinGlyph(12),
-                          ),
+                          )
+                        : null,
                     ),
                     h(
                       'span',
@@ -2756,6 +2882,7 @@ window.__ModuleLoader__.load({
         rail,
         h('div', { className: 'dsh-msg-main' }, main),
         renderOverlay(),
+        renderRowMenu(),
       );
     }
 
@@ -3209,7 +3336,13 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'locale'],
       // Exposed so the unit test can exercise the clipboard picker without a
       // browser; the loader ignores anything beyond inject/apply.
-      __test: { pickPastedImage, formatUnreadTitle, sortContacts, localeWords: DICTS },
+      __test: {
+        pickPastedImage,
+        formatUnreadTitle,
+        sortContacts,
+        clampMenuPosition,
+        localeWords: DICTS,
+      },
       apply(ctx) {
         const t = ctx.locale.bind(NS);
 
@@ -3251,8 +3384,23 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.11.1',
+            version: '1.11.2',
             entries: [
+              {
+                version: '1.11.2',
+                at: '2026-10-29T23:29+08:00',
+                source: 'self-driven',
+                points: {
+                  zh: [
+                    '会话置顶改成右键菜单：在会话上点右键即可「置顶」或「取消置顶」，鼠标悬停时不再冒出图钉按钮',
+                    '已置顶的会话仍带一个小图钉标记；「我聊」始终排在最前，右键不弹置顶菜单',
+                  ],
+                  en: [
+                    'Pinning now lives in a right-click menu: right-click a conversation to pin or unpin it, and no pin button pops up on hover anymore',
+                    'Pinned conversations keep a small pin marker; "Chat with myself" always stays first and has no pin menu',
+                  ],
+                },
+              },
               {
                 version: '1.11.1',
                 at: '2026-10-29T23:11+08:00',

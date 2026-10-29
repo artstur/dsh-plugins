@@ -23,7 +23,7 @@
       "path": "plugins/workspace/chat-room",
       "group": "workspace",
       "name": "@local/chat-room",
-      "version": "1.11.1",
+      "version": "1.11.2",
       "description": "Message list for the Harness Web UI: every installation owns one inbox topic, so an add code is simply its id — paste the other person's code and start chatting. The Host half bridges both DSH instances through a public relay, so people on different networks can talk without exposing a port or signing up."
     },
     {
@@ -95,7 +95,7 @@
       "path": "plugins/agent/self-iteration",
       "group": "agent",
       "name": "@local/self-iteration",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "description": "自驱动迭代：读取「消息」里收到的 DSH 插件反馈，自动生成迭代需求，用创造模式的主 Agent 完成迭代，并把迭代记录以「自驱动」来源写进对应插件的笔记。"
     }
   ]

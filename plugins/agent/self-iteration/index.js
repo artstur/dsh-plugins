@@ -292,6 +292,87 @@ export function apply(ctx, rawConfig) {
     }
   }
 
+  /* ---------------- Immediate scan trigger: watch the Messages file ---------------- */
+
+  let chatWatcher = null
+  let chatWatchDebounce = null
+  let chatWatchRetry = null
+  let chatWatchActive = false
+
+  function stopChatWatch() {
+    chatWatchActive = false
+    if (chatWatchDebounce !== null) {
+      clearTimeout(chatWatchDebounce)
+      chatWatchDebounce = null
+    }
+    if (chatWatchRetry !== null) {
+      clearTimeout(chatWatchRetry)
+      chatWatchRetry = null
+    }
+    if (chatWatcher) {
+      try {
+        chatWatcher.close()
+      } catch (error) {
+        /* already closed */
+      }
+      chatWatcher = null
+    }
+  }
+
+  /** Coalesce the burst of events an atomic state write produces into one scan. */
+  function scheduleWatchedScan() {
+    if (stopped || chatWatchDebounce !== null) return
+    chatWatchDebounce = setTimeout(() => {
+      chatWatchDebounce = null
+      if (stopped) return
+      scanMessages({})
+    }, 300)
+    if (typeof chatWatchDebounce.unref === 'function') chatWatchDebounce.unref()
+  }
+
+  /**
+   * New messages should trigger a scan immediately instead of waiting for the
+   * next periodic tick. The Messages plugin has no cross-plugin event, but it
+   * writes its state file for every change, so watching that file is enough —
+   * and it keeps the two plugins decoupled.
+   */
+  function startChatWatch() {
+    if (stopped || chatWatcher !== null) return
+    const directory = path.dirname(chatStatePath)
+    const base = path.basename(chatStatePath)
+    try {
+      chatWatcher = fs.watch(directory, { persistent: false }, (_event, filename) => {
+        if (filename) {
+          const name = String(filename)
+          // Ignore image uploads and other files in the same directory; state
+          // writes may go through a temporary file next to the target.
+          if (name !== base && name !== base + '.tmp' && name !== '.tmp-' + base) return
+        }
+        scheduleWatchedScan()
+      })
+      chatWatchActive = true
+      if (typeof chatWatcher.on === 'function') {
+        chatWatcher.on('error', () => {
+          stopChatWatch()
+          scheduleChatWatchRetry()
+        })
+      }
+    } catch (error) {
+      chatWatcher = null
+      chatWatchActive = false
+      scheduleChatWatchRetry()
+    }
+  }
+
+  function scheduleChatWatchRetry() {
+    if (stopped || chatWatchRetry !== null) return
+    chatWatchRetry = setTimeout(() => {
+      chatWatchRetry = null
+      startChatWatch()
+    }, 15_000)
+    if (typeof chatWatchRetry.unref === 'function') chatWatchRetry.unref()
+  }
+
   /**
    * Scan the Messages state for new incoming messages.
    *
@@ -765,6 +846,7 @@ export function apply(ctx, rawConfig) {
       dryRun: state.dryRun,
       agentPreset: config.agentPreset,
       scanIntervalMs: Number.isFinite(state.scanIntervalMs) ? state.scanIntervalMs : config.scanIntervalMs,
+      watchActive: chatWatchActive,
       workspaceRoot,
       running: state.running
         ? {
@@ -994,6 +1076,7 @@ export function apply(ctx, rawConfig) {
   /* ---------------- Lifecycle ---------------- */
 
   ctx.effect(() => {
+    startChatWatch()
     // One cheap tick drives both the periodic message scan and the Agent poll.
     // The scan interval is configurable at runtime (0 disables it), so the
     // panel's 定时扫描 setting applies without a reload.
@@ -1017,6 +1100,7 @@ export function apply(ctx, rawConfig) {
       stopped = true
       clearInterval(timer)
       clearTimeout(startup)
+      stopChatWatch()
       flush()
     }
   }, 'self-iteration-loop')

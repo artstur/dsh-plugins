@@ -106,3 +106,22 @@ test('pinned conversations sort first and notes to myself stay on top', () => {
     ['recent', 'older', 'pinned-old', 'pinned-new', 'me'],
   );
 });
+
+test('the right-click pin menu stays inside the viewport', () => {
+  const { clampMenuPosition } = loadClient().__test;
+  const viewport = { width: 1024, height: 768 };
+  const size = { width: 176, height: 40 };
+  // A pointer in the middle anchors the menu exactly there.
+  assert.deepEqual(clampMenuPosition(120, 90, viewport, size), { left: 120, top: 90 });
+  // Near the right and bottom edges the menu flips back inside.
+  assert.deepEqual(clampMenuPosition(1000, 760, viewport, size), { left: 840, top: 720 });
+  // A negative anchor (a synthetic event) never pushes it off screen.
+  assert.deepEqual(clampMenuPosition(-20, -5, viewport, size), { left: 8, top: 8 });
+  // Without a viewport the anchor is used as is, only never negative.
+  assert.deepEqual(clampMenuPosition(30, -4, null, size), { left: 30, top: 0 });
+  // An unknown viewport must not shrink the position either.
+  assert.deepEqual(clampMenuPosition(30, 40, { width: 0, height: 0 }, size), {
+    left: 30,
+    top: 40,
+  });
+});
