@@ -247,9 +247,28 @@ window.__ModuleLoader__.load({
      * (and VERSION) when this plugin ships.
      * ------------------------------------------------------------------ */
 
-    const VERSION = '1.0.4';
+    const VERSION = '1.0.5';
 
     const CHANGELOG = [
+      {
+        version: '1.0.5',
+        at: '2026-10-29T23:58+08:00',
+        source: 'harness',
+        points: {
+          zh: [
+            '调整：DSH 自己完成的迭代，Agent 归属统一显示为「DeepSeek Harness」，不再显示模式/模型细节',
+            '调整：版本记录标题形如「自驱动（DeepSeek Harness）」，汇总笔记的已完成条目同样显示',
+            '改进：已有记录的归属自动迁移到新标签，并触发笔记幂等重写',
+            '说明：模式 / 模型仍记录在插件状态里用于排查，只是不在笔记中展示',
+          ],
+          en: [
+            'Changed: iterations completed by DSH itself now show the Agent attribution as "DeepSeek Harness" instead of mode/model details',
+            'Changed: version-log headings read "Self-driven (DeepSeek Harness)", and the aggregate note shows the same attribution',
+            'Improved: existing records migrate to the new label automatically and their notes are rewritten idempotently',
+            'Note: the preset and model are still recorded in the plugin state for diagnostics, just not shown in notes',
+          ],
+        },
+      },
       {
         version: '1.0.4',
         at: '2026-10-29T23:55+08:00',
@@ -475,7 +494,7 @@ window.__ModuleLoader__.load({
       return '';
     }
 
-    /** The Agent that completed the iteration, e.g. 创造模式 · deepseek-flash. */
+    /** The Agent that completed the iteration, e.g. DeepSeek Harness. */
     function iterationAgentLabel(iteration, lang) {
       if (!iteration || typeof iteration !== 'object') return '';
       const agent = iteration.agent && typeof iteration.agent === 'object' ? iteration.agent : null;

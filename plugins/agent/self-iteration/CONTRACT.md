@@ -84,7 +84,7 @@ interface IterationReport {
     presetLabel: { zh: string; en: string }
     provider: string
     model: string
-    label: { zh: string; en: string }   // 例如 创造模式 · deepseek-flash
+    label: { zh: string; en: string }   // 统一为 DeepSeek Harness（DSH 自己执行）
   }
   pluginName: { zh: string; en: string }
   version: string         // 迭代后的插件版本

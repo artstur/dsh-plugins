@@ -136,12 +136,12 @@ test('maps every self-driven label and renders 自驱动 / Self-driven', async (
   assert.equal(api.changelogAuthor({ source: 'self-driven' }, 'en'), 'Self-driven');
   // The executing Agent is shown in parentheses when the entry carries it.
   assert.equal(
-    api.changelogAuthor({ source: 'self-driven', sourceName: '创造模式 · deepseek-flash' }, 'zh'),
-    '自驱动（创造模式 · deepseek-flash）',
+    api.changelogAuthor({ source: 'self-driven', sourceName: 'DeepSeek Harness' }, 'zh'),
+    '自驱动（DeepSeek Harness）',
   );
   assert.equal(
-    api.changelogAuthor({ source: 'self-driven', sourceName: '创造模式 · deepseek-flash' }, 'en'),
-    'Self-driven (创造模式 · deepseek-flash)',
+    api.changelogAuthor({ source: 'self-driven', sourceName: 'DeepSeek Harness' }, 'en'),
+    'Self-driven (DeepSeek Harness)',
   );
 
   const entry = {
@@ -444,7 +444,7 @@ test('a self-driven entry carries its Agent and resolves the published package i
     version: '1.11.2',
     at: '2026-10-29T23:38+08:00',
     points: { zh: ['置顶改成右键菜单'], en: ['Pin via context menu'] },
-    agentName: '创造模式 · deepseek-flash',
+    agentName: 'DeepSeek Harness',
   });
   assert.equal(result.ok, true, JSON.stringify(result));
 
@@ -454,7 +454,7 @@ test('a self-driven entry carries its Agent and resolves the published package i
   assert.equal(note.system, 'plugin-version-log:dsh-chat-room');
   assert.ok(
     note.body.includes(
-      '## v1.11.2 · 2026-10-29 23:38 +08:00 · 自驱动（创造模式 · deepseek-flash）',
+      '## v1.11.2 · 2026-10-29 23:38 +08:00 · 自驱动（DeepSeek Harness）',
     ),
     note.body,
   );
@@ -483,7 +483,7 @@ test('a self-driven entry carries its Agent and resolves the published package i
     .getSnapshot()
     .notes.find((item) => item.system === 'plugin-version-log:dsh-chat-room');
   assert.ok(
-    after.body.includes('自驱动（创造模式 · deepseek-flash）'),
+    after.body.includes('自驱动（DeepSeek Harness）'),
     'canonical descriptor registration keeps the Agent attribution: ' + after.body,
   );
 });

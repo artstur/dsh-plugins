@@ -163,7 +163,7 @@ function createState() {
             presetLabel: { zh: '创造模式', en: 'Creation mode' },
             provider: 'deepseek-account',
             model: 'deepseek-flash',
-            label: { zh: '创造模式 · deepseek-flash', en: 'Creation mode · deepseek-flash' },
+            label: { zh: 'DeepSeek Harness', en: 'DeepSeek Harness' },
           },
           recordedAt: localTime(29, 21, 55),
           noteApplied: false,
@@ -302,7 +302,7 @@ test('builds the Chinese aggregate note for a mixed requirement set', async () =
 
   // Done item carries target plugin, version, recorded time and the Agent attribution.
   assert.ok(
-    body.includes('  - 「消息」v1.9.10 · 2026-10-29 21:55 · 自驱动（创造模式 · deepseek-flash）'),
+    body.includes('  - 「消息」v1.9.10 · 2026-10-29 21:55 · 自驱动（DeepSeek Harness）'),
     body,
   );
   assert.ok(body.includes('  - 点击消息里的图片会打开灯箱预览，可缩放、可关闭'));
@@ -384,14 +384,14 @@ test('builds the append payload for the target plugin note', async () => {
     version: '1.9.10',
     at: '2026-10-29T21:55+08:00',
     points: { zh: ['支持灯箱预览'], en: ['Adds a lightbox preview'] },
-    agentName: '创造模式 · deepseek-flash',
+    agentName: 'DeepSeek Harness',
     requirementId: 'req-done',
   });
 
   const english = api.buildSelfDrivenEntry(done, 'en');
   assert.equal(english.pluginName.en, 'Messages');
   assert.equal(english.at, '2026-10-29T21:55+08:00');
-  assert.equal(english.agentName, 'Creation mode · deepseek-flash');
+  assert.equal(english.agentName, 'DeepSeek Harness');
 });
 
 test('builds action and reportNote payloads', async () => {
