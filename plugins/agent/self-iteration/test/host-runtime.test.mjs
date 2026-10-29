@@ -248,7 +248,8 @@ test('Host half drives one full dry-run → start → report → auto-pump cycle
     assert.equal(doneRequirement.iteration.noteApplied, false)
     assert.equal(doneRequirement.iteration.agent.preset, 'cordis')
     assert.equal(doneRequirement.iteration.agent.model, 'deepseek-flash')
-    assert.equal(doneRequirement.iteration.agent.label.zh, '创造模式 · deepseek-flash')
+    assert.equal(doneRequirement.iteration.agent.label.zh, 'DeepSeek Harness')
+    assert.equal(doneRequirement.iteration.agent.label.en, 'DeepSeek Harness')
     const second = await report.execute(
       { requirement_id: requirement.id, outcome: 'done', target_plugin: '@local/chat-room', version: '1.9.10' },
       { agent: { id: 'session-1' } },
@@ -493,7 +494,7 @@ test('startup backfills the Agent attribution of existing iterations from their 
     const requirement = state.requirements.find((item) => item.id === 'req-old')
     assert.equal(requirement.iteration.agent.preset, 'cordis')
     assert.equal(requirement.iteration.agent.model, 'deepseek-flash')
-    assert.equal(requirement.iteration.agent.label.zh, '创造模式 · deepseek-flash')
+    assert.equal(requirement.iteration.agent.label.zh, 'DeepSeek Harness')
     assert.equal(requirement.iteration.noteApplied, false, 'the note is re-written with attribution')
   } finally {
     for (const dispose of harness.disposers.reverse()) {

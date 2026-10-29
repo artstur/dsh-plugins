@@ -51,19 +51,21 @@ function presetLabels(preset) {
 }
 
 /**
- * Which Agent completed an iteration: preset, provider and model. This is what
- * the notes show after 「自驱动」, e.g. `自驱动（创造模式 · deepseek-flash）`.
+ * Which Agent completed an iteration. DSH runs the iteration itself (a
+ * creation-mode main Agent), so the note attribution is uniformly
+ * `自驱动（DeepSeek Harness）`; preset/provider/model are still recorded for
+ * diagnostics but are not shown in the version log.
  */
+const HARNESS_AGENT_LABEL = { zh: 'DeepSeek Harness', en: 'DeepSeek Harness' }
+
 function buildAgentInfo({ id, preset, provider, model }) {
-  const label = presetLabels(preset)
-  const suffix = model ? ' · ' + model : ''
   return {
     id: id || '',
     preset: preset || '',
-    presetLabel: label,
+    presetLabel: presetLabels(preset),
     provider: provider || '',
     model: model || '',
-    label: { zh: label.zh + suffix, en: label.en + suffix },
+    label: { zh: HARNESS_AGENT_LABEL.zh, en: HARNESS_AGENT_LABEL.en },
   }
 }
 
@@ -496,8 +498,24 @@ export function apply(ctx, rawConfig) {
    */
   async function backfillAgentAttribution() {
     const controller = ctx.get('sessionController')
-    if (!controller || typeof controller.inspect !== 'function') return
     let changed = 0
+
+    // Existing attributions keep their preset/model diagnostics but adopt the
+    // uniform DeepSeek Harness display label; their notes are rewritten.
+    for (const requirement of state.requirements) {
+      const iteration = requirement.iteration
+      if (!iteration || !iteration.agent) continue
+      const label = iteration.agent.label || {}
+      if (label.zh === HARNESS_AGENT_LABEL.zh && label.en === HARNESS_AGENT_LABEL.en) continue
+      iteration.agent.label = { zh: HARNESS_AGENT_LABEL.zh, en: HARNESS_AGENT_LABEL.en }
+      if (iteration.noteApplied) iteration.noteApplied = false
+      changed += 1
+    }
+
+    if (!controller || typeof controller.inspect !== 'function') {
+      if (changed > 0) persist()
+      return
+    }
     for (const requirement of state.requirements) {
       const iteration = requirement.iteration
       if (!iteration || iteration.agent || !requirement.sessionId) continue
