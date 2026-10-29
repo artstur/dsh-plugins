@@ -92,12 +92,9 @@ git push origin HEAD:main
 RELAY="${RELAY:-https://ntfy.sh}"
 TOPIC="${TOPIC:-dsh-chat-room-releases}"
 # The notice is signed, so the plugin only believes a notice that really
-# comes from here. The key is kept in the plugin data directory, with a copy
-# in this repository as a backup.
-KEY_FILE="${KEY_FILE:-$ROOT/../chat-room/.release-key.pem}"
-if [ ! -f "$KEY_FILE" ]; then
-  KEY_FILE="${DSH_HOME:-$HOME/.dsh}/plugin-data/chat-room/release-key.pem"
-fi
+# comes from here. The private key only lives in the local plugin-data
+# directory and must never be bundled, mirrored or committed.
+KEY_FILE="${KEY_FILE:-${DSH_HOME:-$HOME/.dsh}/plugin-data/chat-room/release-key.pem}"
 if [ -f "$KEY_FILE" ]; then
   NOTICE=$(node -e "
 const crypto = require('crypto');

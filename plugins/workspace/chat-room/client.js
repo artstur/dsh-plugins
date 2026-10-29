@@ -3251,8 +3251,24 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.11.0',
+            version: '1.11.1',
             entries: [
+              {
+                version: '1.11.1',
+                at: '2026-10-29T23:11+08:00',
+                source: 'external',
+                sourceName: 'Codex',
+                points: {
+                  zh: [
+                    '发布签名私钥只保存在本机 plugin-data 目录，不再进入插件源码、同步镜像或公开仓库',
+                    '发布脚本默认从受保护的数据目录读取密钥，并在源码层忽略任何误放的私钥文件',
+                  ],
+                  en: [
+                    'The release-signing private key now stays only in the local plugin-data directory and never enters plugin source, sync mirrors or public repositories',
+                    'The release script reads the key from protected local data by default, while source control ignores any accidentally placed private-key file',
+                  ],
+                },
+              },
               {
                 version: '1.11.0',
                 at: '2026-10-29T23:01+08:00',
@@ -3640,12 +3656,12 @@ window.__ModuleLoader__.load({
                   zh: [
                     '发布通知改成签名的：通知里带版本号、下载地址和 sha256，插件用内置公钥验签后才认',
                     '这样新版本几秒内就能被发现，不用等 CDN 把清单刷新；伪造的通知会被直接丢掉',
-                    '签名私钥放在插件数据目录，仓库里有一份备份',
+                    '签名私钥只放在本机插件数据目录，不随插件或仓库分发',
                   ],
                   en: [
                     'The release notice is signed now: it carries the version, the download address and the sha256, and the plugin only believes it after checking the signature with its built-in public key',
                     'That way a new release is found within seconds instead of waiting for a CDN to refresh the manifest; a forged notice is dropped',
-                    'The signing key lives in the plugin data directory, with a copy in the repository as a backup',
+                    'The signing key lives only in the local plugin data directory and is never distributed with the plugin',
                   ],
                 },
               },
