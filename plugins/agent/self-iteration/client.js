@@ -31,6 +31,24 @@ window.__ModuleLoader__.load({
     /* The Notes half may load after this one; wait before reporting it missing. */
     const SINK_GRACE_MS = 15000;
 
+    /* Timed scan offered by the collapsed settings strip (CONTRACT §1
+     * setScanInterval): 0 disables the Host's periodic scan. */
+    const DEFAULT_SCAN_INTERVAL_MS = 5000;
+    const SCAN_INTERVAL_CHOICES = Object.freeze([
+      Object.freeze({ ms: 0, labelKey: 'intervalOff' }),
+      Object.freeze({ ms: 5000, labelKey: 'interval5s' }),
+      Object.freeze({ ms: 30000, labelKey: 'interval30s' }),
+      Object.freeze({ ms: 60000, labelKey: 'interval1m' }),
+      Object.freeze({ ms: 300000, labelKey: 'interval5m' }),
+    ]);
+
+    /* The simplified panel keeps advanced controls collapsed by default. */
+    const PANEL_DEFAULTS = Object.freeze({
+      settingsOpen: false,
+      composerOpen: false,
+      scanIntervalMs: DEFAULT_SCAN_INTERVAL_MS,
+    });
+
     const OFFSET_MINUTES = 8 * 60; // Asia/Shanghai, no DST since 1991.
 
     /* ------------------------------------------------------------------ *
@@ -51,11 +69,27 @@ window.__ModuleLoader__.load({
         autoHint: '检测到需求后自动交给创造模式 Agent 执行',
         dryRunLabel: '试运行',
         dryRunHint: '只生成需求与提示词，不创建会话',
-        scanNow: '立即扫描',
+        scanNow: '扫描需求',
         scanHistory: '补扫最近 24 小时',
         scanning: '扫描中…',
         refresh: '刷新',
         refreshHint: '重新读取最新状态',
+        settings: '设置',
+        settingsHint: '自动迭代、试运行与定时扫描',
+        timedScan: '定时扫描',
+        scanIntervalHint: '定时自动扫描「消息」里的新反馈',
+        intervalOff: '关闭',
+        interval5s: '每 5 秒',
+        interval30s: '每 30 秒',
+        interval1m: '每 1 分钟',
+        interval5m: '每 5 分钟',
+        intervalEveryPrefix: '每 ',
+        intervalSecondUnit: ' 秒',
+        intervalMinuteUnit: ' 分钟',
+        intervalMsUnit: ' 毫秒',
+        addManual: '＋ 手动添加需求',
+        composerCollapse: '收起输入框',
+        dash: '—',
         composeLabel: '手动创建需求（用于测试）',
         composePlaceholder: '粘贴一条插件反馈，或描述想让哪个插件怎么改…（⌘/Ctrl + Enter 创建）',
         create: '创建需求',
@@ -126,11 +160,27 @@ window.__ModuleLoader__.load({
         autoHint: 'Start the creation-mode Agent automatically when a requirement is detected',
         dryRunLabel: 'Dry run',
         dryRunHint: 'Generate requirements and prompts only; do not create a session',
-        scanNow: 'Scan now',
+        scanNow: 'Scan requests',
         scanHistory: 'Scan last 24 hours',
         scanning: 'Scanning…',
         refresh: 'Refresh',
         refreshHint: 'Reload the latest state',
+        settings: 'Settings',
+        settingsHint: 'Auto iterate, dry run and timed scan',
+        timedScan: 'Timed scan',
+        scanIntervalHint: 'Automatically scan Messages for new feedback',
+        intervalOff: 'Off',
+        interval5s: 'Every 5s',
+        interval30s: 'Every 30s',
+        interval1m: 'Every 1 min',
+        interval5m: 'Every 5 min',
+        intervalEveryPrefix: 'every ',
+        intervalSecondUnit: 's',
+        intervalMinuteUnit: ' min',
+        intervalMsUnit: 'ms',
+        addManual: '+ Add request manually',
+        composerCollapse: 'Hide editor',
+        dash: '—',
         composeLabel: 'Create a requirement manually (for testing)',
         composePlaceholder: 'Paste plugin feedback, or describe what should change in which plugin… (⌘/Ctrl + Enter to create)',
         create: 'Create requirement',
@@ -306,6 +356,35 @@ window.__ModuleLoader__.load({
       if (hours > 0) return hours + dict.elapsedHour + (minutes > 0 ? ' ' + minutes + dict.elapsedMinute : '');
       if (minutes > 0) return minutes + dict.elapsedMinute + (seconds > 0 ? ' ' + seconds + dict.elapsedSecond : '');
       return seconds + dict.elapsedSecond;
+    }
+
+    /** The interval the UI should show; tolerate a Host predating the field. */
+    function effectiveScanInterval(state) {
+      const value = state && state.scanIntervalMs;
+      if (Number.isFinite(value) && value >= 0) return value;
+      return DEFAULT_SCAN_INTERVAL_MS;
+    }
+
+    function scanIntervalOptionKey(ms) {
+      for (const choice of SCAN_INTERVAL_CHOICES) {
+        if (choice.ms === ms) return choice.labelKey;
+      }
+      return '';
+    }
+
+    /** Human label for a timed-scan interval (0 = off). */
+    function formatScanInterval(ms, lang) {
+      const dict = dictOf(lang);
+      const value = Number.isFinite(ms) && ms >= 0 ? ms : DEFAULT_SCAN_INTERVAL_MS;
+      const optionKey = scanIntervalOptionKey(value);
+      if (optionKey !== '') return dict[optionKey];
+      if (value > 0 && value % 60000 === 0) {
+        return dict.intervalEveryPrefix + value / 60000 + dict.intervalMinuteUnit;
+      }
+      if (value > 0 && value % 1000 === 0) {
+        return dict.intervalEveryPrefix + value / 1000 + dict.intervalSecondUnit;
+      }
+      return dict.intervalEveryPrefix + value + dict.intervalMsUnit;
     }
 
     /** Prevent user text from breaking the Markdown structure of a note. */
@@ -812,6 +891,52 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** Small magnifier used by the header's single manual-scan button. */
+    function scanGlyph(size) {
+      const edge = typeof size === 'number' && size > 0 ? size : 16;
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: edge,
+          height: edge,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.8,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: 'false',
+          style: { display: 'block' },
+        },
+        h('circle', { cx: 10.6, cy: 10.6, r: 5.6 }),
+        h('path', { d: 'M14.8 14.8 19.2 19.2' }),
+      );
+    }
+
+    /** Small gear used by the header's settings toggle. */
+    function settingsGlyph(size) {
+      const edge = typeof size === 'number' && size > 0 ? size : 16;
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: edge,
+          height: edge,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.7,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: 'false',
+          style: { display: 'block' },
+        },
+        h('circle', { cx: 12, cy: 12, r: 3.1 }),
+        h('path', { d: 'M12 2.9v2.3M12 18.8v2.3M2.9 12h2.3M18.8 12h2.3M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6' }),
+      );
+    }
+
     function SelfIterationIcon(props) {
       const size = props && typeof props.size === 'number' && props.size > 0 ? props.size : 20;
       const active = !!(props && props.active);
@@ -1053,6 +1178,10 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = React.useState({});
       const [draft, setDraft] = React.useState('');
       const [expanded, setExpanded] = React.useState({});
+      /* The simplified panel: advanced controls and the manual composer are
+       * collapsed behind their own small entries by default. */
+      const [settingsOpen, setSettingsOpen] = React.useState(PANEL_DEFAULTS.settingsOpen);
+      const [composerOpen, setComposerOpen] = React.useState(PANEL_DEFAULTS.composerOpen);
       const aliveRef = React.useRef(true);
       const busyRef = React.useRef({});
 
@@ -1152,16 +1281,19 @@ window.__ModuleLoader__.load({
       const toggleExpanded = (key) => {
         setExpanded((previous) => Object.assign({}, previous, { [key]: !previous[key] }));
       };
+      const changeScanInterval = (ms) => {
+        if (!state || busyRef.current.interval === true) return;
+        void runAction('interval', buildAction('setScanInterval', { ms }));
+      };
 
       const header = h(
         'header',
-        { className: 'dsh-si-header' },
+        { className: 'dsh-si-header', title: t('subtitle') },
         h('span', { className: 'dsh-si-mark', 'aria-hidden': true }, iterationGlyph(16)),
         h(
           'div',
           { className: 'dsh-si-heading' },
           h('h1', { className: 'dsh-si-title' }, t('title')),
-          h('p', { className: 'dsh-si-subtitle', title: t('subtitle') }, t('subtitle')),
         ),
         h(
           'span',
@@ -1169,78 +1301,137 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-si-dot', 'data-state': statusKey, 'aria-hidden': true }),
           stateLabel,
         ),
-      );
-
-      const toolbar = h(
-        'div',
-        { className: 'dsh-si-toolbar' },
-        h(Switch, {
-          label: t('autoLabel'),
-          hint: t('autoHint'),
-          checked: !!(state && state.autoIterate),
-          disabled: !state,
-          busy: busy.auto === true,
-          onToggle: toggleAuto,
-        }),
-        h(Switch, {
-          label: t('dryRunLabel'),
-          hint: t('dryRunHint'),
-          checked: !!(state && state.dryRun),
-          disabled: !state,
-          busy: busy.dryRun === true,
-          onToggle: toggleDryRun,
-        }),
-        h('button', {
-          type: 'button',
-          className: 'dsh-si-btn',
-          disabled: !state || busy.scan === true,
-          onClick: scanNow,
-        }, busy.scan === true ? t('scanning') : t('scanNow')),
-        h('button', {
-          type: 'button',
-          className: 'dsh-si-btn',
-          disabled: !state || busy.scanHistory === true,
-          onClick: scanHistory,
-        }, busy.scanHistory === true ? t('scanning') : t('scanHistory')),
-        h('span', { className: 'dsh-si-spacer' }),
-        h('button', {
-          type: 'button',
-          className: 'dsh-si-btn dsh-si-btn--ghost',
-          title: t('refreshHint'),
-          'aria-label': t('refresh'),
-          disabled: busy.refresh === true,
-          onClick: reload,
-        }, t('refresh')),
-      );
-
-      const compose = h(
-        'section',
-        { className: 'dsh-si-compose' },
-        h('textarea', {
-          className: 'dsh-si-textarea',
-          rows: 2,
-          value: draft,
-          placeholder: t('composePlaceholder'),
-          'aria-label': t('composeLabel'),
-          onChange: (event) => setDraft(event.target.value),
-          onKeyDown: (event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-              event.preventDefault();
-              submitDraft();
-            }
-          },
-        }),
         h(
           'div',
-          { className: 'dsh-si-compose-actions' },
+          { className: 'dsh-si-header-actions' },
           h('button', {
             type: 'button',
             className: 'dsh-si-btn dsh-si-btn--primary',
-            disabled: draft.trim() === '' || busy.create === true,
-            onClick: submitDraft,
-          }, t('create')),
+            disabled: !state || busy.scan === true,
+            onClick: scanNow,
+          }, scanGlyph(13), busy.scan === true ? t('scanning') : t('scanNow')),
+          h('button', {
+            type: 'button',
+            className: 'dsh-si-icon-btn',
+            title: t('settingsHint'),
+            'aria-label': t('settings'),
+            'aria-expanded': settingsOpen === true,
+            'aria-controls': 'dsh-si-settings',
+            onClick: () => setSettingsOpen((previous) => !previous),
+          }, settingsGlyph(15)),
         ),
       );
+
+      const scanIntervalMs = effectiveScanInterval(state);
+      const intervalChoices = SCAN_INTERVAL_CHOICES.map((choice) =>
+        h('button', {
+          key: choice.ms,
+          type: 'button',
+          role: 'radio',
+          'aria-checked': scanIntervalMs === choice.ms,
+          'aria-label': t('timedScan') + t('labelColon') + formatScanInterval(choice.ms, lang),
+          className: 'dsh-si-choice',
+          disabled: !state || busy.interval === true,
+          onClick: () => changeScanInterval(choice.ms),
+        }, formatScanInterval(choice.ms, lang)));
+
+      // The advanced controls live behind the gear and start collapsed; the
+      // header itself keeps only the status dot and the one manual scan button.
+      const settings = settingsOpen
+        ? h(
+            'section',
+            { className: 'dsh-si-settings', id: 'dsh-si-settings' },
+            h(
+              'div',
+              { className: 'dsh-si-settings-row' },
+              h(Switch, {
+                label: t('autoLabel'),
+                hint: t('autoHint'),
+                checked: !!(state && state.autoIterate),
+                disabled: !state,
+                busy: busy.auto === true,
+                onToggle: toggleAuto,
+              }),
+              h(Switch, {
+                label: t('dryRunLabel'),
+                hint: t('dryRunHint'),
+                checked: !!(state && state.dryRun),
+                disabled: !state,
+                busy: busy.dryRun === true,
+                onToggle: toggleDryRun,
+              }),
+            ),
+            h(
+              'div',
+              { className: 'dsh-si-settings-row' },
+              h('span', { className: 'dsh-si-settings-label' }, t('timedScan')),
+              h('div', { className: 'dsh-si-choices', role: 'radiogroup', 'aria-label': t('timedScan') }, intervalChoices),
+              h('span', { className: 'dsh-si-settings-hint' }, t('scanIntervalHint')),
+            ),
+            h(
+              'div',
+              { className: 'dsh-si-settings-row' },
+              h('button', {
+                type: 'button',
+                className: 'dsh-si-btn dsh-si-btn--small',
+                disabled: !state || busy.scanHistory === true,
+                onClick: scanHistory,
+              }, busy.scanHistory === true ? t('scanning') : t('scanHistory')),
+              h('button', {
+                type: 'button',
+                className: 'dsh-si-btn dsh-si-btn--small dsh-si-btn--ghost',
+                title: t('refreshHint'),
+                'aria-label': t('refresh'),
+                disabled: busy.refresh === true,
+                onClick: reload,
+              }, t('refresh')),
+            ),
+          )
+        : null;
+
+      // Manual creation stays collapsed into one small line until the user
+      // needs it, keeping the panel body focused on the requirement list.
+      const compose = composerOpen
+        ? h(
+            'section',
+            { className: 'dsh-si-compose', id: 'dsh-si-compose' },
+            h('textarea', {
+              className: 'dsh-si-textarea',
+              rows: 2,
+              value: draft,
+              placeholder: t('composePlaceholder'),
+              'aria-label': t('composeLabel'),
+              onChange: (event) => setDraft(event.target.value),
+              onKeyDown: (event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  submitDraft();
+                }
+              },
+            }),
+            h(
+              'div',
+              { className: 'dsh-si-compose-actions' },
+              h('button', {
+                type: 'button',
+                className: 'dsh-si-btn dsh-si-btn--primary',
+                disabled: draft.trim() === '' || busy.create === true,
+                onClick: submitDraft,
+              }, t('create')),
+              h('button', {
+                type: 'button',
+                className: 'dsh-si-btn dsh-si-btn--ghost',
+                onClick: () => setComposerOpen(false),
+              }, t('composerCollapse')),
+            ),
+          )
+        : h('button', {
+            type: 'button',
+            className: 'dsh-si-compose-entry',
+            'aria-expanded': false,
+            'aria-controls': 'dsh-si-compose',
+            onClick: () => setComposerOpen(true),
+          }, t('addManual'));
 
       const banners = [];
       if (fetchError !== '') banners.push(t('fetchErrorPrefix') + fetchError);
@@ -1309,6 +1500,11 @@ window.__ModuleLoader__.load({
       const footer = h(
         'footer',
         { className: 'dsh-si-footer' },
+        h(
+          'span',
+          { className: 'dsh-si-footer-item' },
+          t('timedScan') + t('labelColon') + (state ? formatScanInterval(scanIntervalMs, lang) : t('dash')),
+        ),
         h('span', { className: 'dsh-si-footer-item' }, t('lastScan') + t('labelColon') + (scanTime !== '' ? scanTime : t('never'))),
         h(
           'span',
@@ -1322,7 +1518,7 @@ window.__ModuleLoader__.load({
         { className: 'dsh-si-root' },
         h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
         header,
-        toolbar,
+        settings,
         banner,
         compose,
         h('div', { className: 'dsh-si-list' }, listContent),
@@ -1341,13 +1537,25 @@ window.__ModuleLoader__.load({
       '.dsh-si-mark{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 auto;border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-brand-primary)}',
       '.dsh-si-heading{flex:1 1 auto;min-width:0}',
       '.dsh-si-title{margin:0;font-size:15px;font-weight:600;line-height:22px;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '.dsh-si-subtitle{margin:2px 0 0;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsh-si-state{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;padding:3px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1);font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);white-space:nowrap}',
       '.dsh-si-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--dsw-alias-state-idle-primary)}',
       '.dsh-si-dot[data-state="running"]{background:var(--dsw-alias-state-success-primary)}',
       '.dsh-si-dot[data-state="disabled"]{background:var(--dsw-alias-state-error-primary)}',
-      '.dsh-si-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:0 0 auto;padding:10px 20px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}',
-      '.dsh-si-spacer{flex:1 1 auto}',
+      '.dsh-si-header-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}',
+      '.dsh-si-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 auto;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}',
+      '.dsh-si-icon-btn:hover{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}',
+      '.dsh-si-icon-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
+      '.dsh-si-icon-btn[aria-expanded="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}',
+      '.dsh-si-settings{display:flex;flex-direction:column;gap:10px;flex:0 0 auto;padding:12px 20px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}',
+      '.dsh-si-settings-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}',
+      '.dsh-si-settings-label{font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary)}',
+      '.dsh-si-settings-hint{font-size:11px;line-height:15px;color:var(--dsw-alias-label-tertiary)}',
+      '.dsh-si-choices{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px}',
+      '.dsh-si-choice{display:inline-flex;align-items:center;justify-content:center;height:26px;padding:0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}',
+      '.dsh-si-choice:hover{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}',
+      '.dsh-si-choice:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
+      '.dsh-si-choice[aria-checked="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}',
+      '.dsh-si-choice:disabled{opacity:.55;cursor:default}',
       '.dsh-si-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background-color .15s ease,border-color .15s ease,color .15s ease}',
       '.dsh-si-btn:hover{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l2)}',
       '.dsh-si-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
@@ -1372,6 +1580,9 @@ window.__ModuleLoader__.load({
       '.dsh-si-textarea::placeholder{color:var(--dsw-alias-label-secondary)}',
       '.dsh-si-textarea:focus{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}',
       '.dsh-si-compose-actions{display:flex;flex-direction:column;flex:0 0 auto}',
+      '.dsh-si-compose-entry{display:flex;align-items:center;flex:0 0 auto;width:calc(100% - 40px);box-sizing:border-box;height:30px;margin:8px 20px 0;padding:0 10px;border:1px dashed var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;text-align:left;cursor:pointer}',
+      '.dsh-si-compose-entry:hover{background:var(--dsw-alias-bg-layer-1);border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}',
+      '.dsh-si-compose-entry:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
       '.dsh-si-banner{display:flex;flex-direction:column;gap:4px;flex:0 0 auto;margin:10px 20px 0;padding:8px 10px;border:1px solid var(--dsw-alias-state-error-primary);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:17px}',
       '.dsh-si-banner-line{word-break:break-word}',
       '.dsh-si-list{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow-y:auto;padding:12px 20px}',

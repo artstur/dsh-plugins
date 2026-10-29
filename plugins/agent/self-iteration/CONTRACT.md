@@ -40,6 +40,7 @@ interface Snapshot {
   autoIterate: boolean        // 检测到需求后是否自动驱动 Agent
   dryRun: boolean             // 试运行：只生成需求与提示词，不创建 Session
   agentPreset: string         // 默认 'cordis'（创造模式）
+  scanIntervalMs: number     // 定时扫描间隔（毫秒）；0 = 关闭。默认 5000
   running: RunningIteration | null
   requirements: Requirement[] // 按 detectedAt 倒序，最新的在前；最多 100 条
   stats: {
@@ -111,10 +112,15 @@ interface NoteSyncEvidence {
 | `openNote` | `id: string` | 返回 `{ ok: true, noteTitle }`，仅用于提示 |
 | `reportNote` | `report: NoteSyncEvidence` | Client 汇报笔记同步结果；Host 保存进 `stats.noteSync`，并对 `appliedIds` 里的需求置 `iteration.noteApplied = true` |
 | `setDryRun` | `enabled: boolean` | 切换试运行 |
+| `setScanInterval` | `ms: number` | 设置定时扫描间隔（毫秒，0=关闭，上限 600000）。Host 的扫描循环按它执行 |
 
 Client 后台每 8 秒轮询 `state`；面板打开时每 4 秒轮询。Host 不使用 SSE。
 
 ---
+
+> 需求来源：除「消息」里别人发来的消息外，用户在 **「我聊」（self chat，contact.self =
+> true）** 里写给自己的消息同样算需求来源——用户常把想法丢在这里，不能因为
+> `mine: true` 被过滤掉。
 
 ## 2. Client 半边职责（`self-iteration/client.js`）
 
@@ -141,10 +147,12 @@ window.__ModuleLoader__.load({
    `verify-before-finish/client.js`、`notes-panel/client.js`）；文案用 `ctx.locale.bind('selfIteration')`。
 3. 注册侧边栏 `sidebar.panellist`：`{ id: 'selfIteration', order: 8, label: () => t('panel.label') }`
    和 `main` keyed slot `{ key: 'selfIteration' }`，均通过 `ctx.slots.inject(...)` 注册。
-4. 面板：显示开关（自动迭代 / 试运行）、需求列表（状态 chip、来源联系人、消息原文、
-   迭代结果、操作按钮「开始 / 忽略 / 打开会话 / 重试 / 删除」）、「立即扫描」「补扫最近 24 小时」
-   按钮、笔记同步状态、错误提示。样式内联 `<style>`，只用 `--dsw-alias-*` token，
-   与 Harness 视觉一致；中英文跟随 `ctx.locale`。
+4. 面板（**头部保持极简**）：头部只有标题、状态点、一个主按钮「扫描需求」（`scan`）和一个
+   设置（齿轮）开关；「自动迭代 / 试运行 / 定时扫描间隔 / 补扫最近 24 小时」收进默认折叠的
+   设置条里。正文是需求列表（状态 chip、来源联系人、消息原文、迭代结果、操作按钮
+   「开始 / 忽略 / 打开会话 / 重试 / 删除」）；「手动创建需求」默认折叠成一行小入口，
+   点开才显示输入框。底部状态行显示「定时扫描」间隔、最近扫描时间与最近笔记同步。
+   样式内联 `<style>`，只用 `--dsw-alias-*` token，与 Harness 视觉一致；中英文跟随 `ctx.locale`。
 5. 后台笔记同步（面板关着也要跑）：`ctx.effect` 内定时（8s）拉 `state`，当
    `state` 变化（可用 JSON 指纹比较）时执行：
    a. 汇总笔记：`upsertManagedNote`（见 §3），key `self-iteration-requests`，
