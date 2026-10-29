@@ -86,3 +86,23 @@ test('unread labels use locale string templates and never take down the sidebar'
     '2 unread',
   );
 });
+
+test('pinned conversations sort first and notes to myself stay on top', () => {
+  const { sortContacts } = loadClient().__test;
+  const contacts = [
+    { id: 'recent', lastMessage: { at: 400 }, createdAt: 1 },
+    { id: 'older', lastMessage: { at: 100 }, createdAt: 2 },
+    { id: 'pinned-old', pinned: true, lastMessage: { at: 200 }, createdAt: 3 },
+    { id: 'pinned-new', pinned: true, lastMessage: { at: 300 }, createdAt: 4 },
+    { id: 'me', self: true, lastMessage: { at: 50 }, createdAt: 5 },
+  ];
+  assert.deepEqual(
+    sortContacts(contacts).map((contact) => contact.id),
+    ['me', 'pinned-new', 'pinned-old', 'recent', 'older'],
+  );
+  // Sorting never reorders the input in place.
+  assert.deepEqual(
+    contacts.map((contact) => contact.id),
+    ['recent', 'older', 'pinned-old', 'pinned-new', 'me'],
+  );
+});

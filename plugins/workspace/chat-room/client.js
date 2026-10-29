@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.10.0.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.11.0.tgz';
 
     /**
      * The stylesheet is injected once for the whole plugin, not by the panel:
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.10.0';
+    const CLIENT_BUILD = '1.11.0';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
@@ -95,6 +95,9 @@ window.__ModuleLoader__.load({
         selfChat: '我聊',
         selfBadge: '自己',
         selfChatHint: '给自己记一条，只存在这台机器上',
+        pin: '置顶',
+        unpin: '取消置顶',
+        pinned: '已置顶',
         reply: '引用',
         updatedTo: '已更新到',
         reloadHint: '刷新页面后新版本才会显示出来',
@@ -209,6 +212,9 @@ window.__ModuleLoader__.load({
         selfChat: 'Chat with myself',
         selfBadge: 'me',
         selfChatHint: 'Notes to yourself, kept on this machine only',
+        pin: 'Pin to top',
+        unpin: 'Unpin',
+        pinned: 'Pinned',
         reply: 'Quote',
         updatedTo: 'Updated to',
         reloadHint: 'the new version shows up after a page reload',
@@ -362,8 +368,18 @@ window.__ModuleLoader__.load({
       return messages;
     }
 
+    /** Where a row sits: notes to myself stay first, then pinned rows, then
+     *  the rest in the order the last message arrived. */
+    function contactRank(contact) {
+      if (!contact) return 0;
+      if (contact.self) return 2;
+      return contact.pinned ? 1 : 0;
+    }
+
     function sortContacts(contacts) {
       return contacts.slice().sort((left, right) => {
+        const rank = contactRank(right) - contactRank(left);
+        if (rank) return rank;
         const leftAt = left.lastMessage ? left.lastMessage.at : left.createdAt || 0;
         const rightAt = right.lastMessage ? right.lastMessage.at : right.createdAt || 0;
         return rightAt - leftAt;
@@ -588,6 +604,33 @@ window.__ModuleLoader__.load({
         [
           h('path', { key: 'pencil', d: 'M10.6 2.9l2.5 2.5-7.4 7.4-3.1.6.6-3.1z' }),
           h('path', { key: 'tip', d: 'M9.4 4.1l2.5 2.5' }),
+        ],
+      );
+    }
+
+    /** A pin: marks a conversation that stays at the top of the list. */
+    function pinGlyph(size) {
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.8,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+          focusable: 'false',
+          style: { display: 'block' },
+        },
+        [
+          h('path', {
+            key: 'pin',
+            d: 'M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
+          }),
+          h('path', { key: 'stem', d: 'M12 17v5' }),
         ],
       );
     }
@@ -896,6 +939,12 @@ window.__ModuleLoader__.load({
       '.dsh-msg-rename{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--dsw-alias-label-secondary);opacity:0;transition:opacity .12s ease}',
       '.dsh-msg-row:hover .dsh-msg-rename,.dsh-msg-row:focus-within .dsh-msg-rename{opacity:1}',
       '.dsh-msg-row-time{font-size:10.5px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:0 0 auto}',
+      ".dsh-msg-pin{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;align-self:center;width:20px;height:20px;margin:-4px -4px -4px 0;border-radius:6px;color:var(--dsw-alias-label-secondary);opacity:0;cursor:pointer;transition:opacity .12s ease,color .12s ease,background-color .12s ease}",
+      '.dsh-msg-row:hover .dsh-msg-pin,.dsh-msg-row:focus-within .dsh-msg-pin{opacity:1}',
+      ".dsh-msg-pin[data-pinned='true']{opacity:1;color:var(--dsw-alias-brand-primary)}",
+      '.dsh-msg-pin:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}',
+      ".dsh-msg-pin[data-pinned='true']:hover{color:var(--dsw-alias-brand-primary)}",
+      '.dsh-msg-pin:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:0}',
       '.dsh-msg-row-preview{font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dsh-msg-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--dsw-alias-state-error-primary);color:#fff;font-size:10.5px;font-weight:600;flex:0 0 auto}',
       '.dsh-msg-rail-foot{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:10px 16px;border-top:1px solid var(--dsw-alias-border-l1)}',
@@ -1310,6 +1359,19 @@ window.__ModuleLoader__.load({
           setSendError('');
         },
         [activeId, post, t],
+      );
+
+      // Pinning only changes where the row sits, never what it contains.
+      const togglePinned = React.useCallback(
+        async (contact) => {
+          if (!contact || contact.self) return;
+          const result = await post('/contacts/pin', {
+            id: contact.id,
+            pinned: !contact.pinned,
+          });
+          if (!result.ok) setSendError(result.detail || t('loadError'));
+        },
+        [post, t],
       );
 
       const handleSend = async () => {
@@ -2168,6 +2230,32 @@ window.__ModuleLoader__.load({
                         { className: 'dsh-msg-row-time' },
                         contact.lastMessage ? shortTime(contact.lastMessage.at) : '',
                       ),
+                      // Notes to myself are always first, so they need no pin.
+                      contact.self
+                        ? null
+                        : h(
+                            'span',
+                            {
+                              className: 'dsh-msg-pin',
+                              role: 'button',
+                              tabIndex: 0,
+                              'data-pinned': contact.pinned ? 'true' : 'false',
+                              title: contact.pinned ? t('unpin') : t('pin'),
+                              'aria-label': contact.pinned ? t('unpin') : t('pin'),
+                              onClick: (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void togglePinned(contact);
+                              },
+                              onKeyDown: (event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void togglePinned(contact);
+                              },
+                            },
+                            pinGlyph(12),
+                          ),
                     ),
                     h(
                       'span',
@@ -3121,7 +3209,7 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'locale'],
       // Exposed so the unit test can exercise the clipboard picker without a
       // browser; the loader ignores anything beyond inject/apply.
-      __test: { pickPastedImage, formatUnreadTitle, localeWords: DICTS },
+      __test: { pickPastedImage, formatUnreadTitle, sortContacts, localeWords: DICTS },
       apply(ctx) {
         const t = ctx.locale.bind(NS);
 
@@ -3163,8 +3251,25 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.10.0',
+            version: '1.11.0',
             entries: [
+              {
+                version: '1.11.0',
+                at: '2026-10-29T23:01+08:00',
+                source: 'self-driven',
+                points: {
+                  zh: [
+                    '会话列表支持置顶：鼠标移到一条会话上，点右侧的小图钉即可置顶，置顶的会话排在列表最前并一直显示图钉',
+                    '再点一次图钉取消置顶；置顶只存在这台机器上，重启 DSH 后仍然保留',
+                    '「我聊」始终排在最前，不受置顶影响',
+                  ],
+                  en: [
+                    'Conversations can now be pinned: hover a row and click the small pin on the right; pinned rows sort to the top of the list and keep showing the pin',
+                    'Click the pin again to unpin; the choice is stored on this machine and survives a restart',
+                    '"Chat with myself" always stays first, regardless of pins',
+                  ],
+                },
+              },
               {
                 version: '1.10.0',
                 at: '2026-10-29T21:29+08:00',

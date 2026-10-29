@@ -227,7 +227,7 @@ export function encodeContactCode({ relay, room, name, update }) {
 }
 
 /** The version this build reports. */
-export const PLUGIN_VERSION = '1.10.0';
+export const PLUGIN_VERSION = '1.11.0';
 
 /** The name the plugin is published under. */
 export const PUBLISHED_PACKAGE_NAME = 'dsh-chat-room';
