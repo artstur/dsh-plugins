@@ -7,7 +7,7 @@ import test from 'node:test'
 
 import { apply, ROUTE_PREFIX } from '../index.js'
 
-const PNG_MESSAGE = { id: 'm-zoom', at: Date.parse('2026-10-28T15:13:00Z'), mine: false, text: '点击图片无法放大捏' }
+const PNG_MESSAGE = { id: 'm-zoom', at: Date.now() - 60_000, mine: false, text: '点击图片无法放大捏' }
 
 function writeChatState(home, messages, contacts = [{ id: 'c1', name: '问号' }]) {
   const threads = {}
@@ -290,7 +290,7 @@ test('Host half drives one full dry-run → start → report → auto-pump cycle
   }
 })
 
-test('the configurable periodic scan picks up a new self-chat note', async () => {
+test('GET /state is read-only and the periodic scan interval is configurable', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-self-iteration-'))
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -307,37 +307,26 @@ test('the configurable periodic scan picks up a new self-chat note', async () =>
     await new Promise((resolve) => setTimeout(resolve, 1800))
     let state = (await call(harness.routes, 'GET', '/state')).json.state
     assert.equal(state.scanIntervalMs, 0, 'snapshot exposes the scan interval')
+    assert.equal(state.watchActive, true, 'the immediate file watch is active')
 
-    // Periodic scan is off: a new self-chat note is not picked up.
-    writeSelfChatState(home, [
-      {
-        id: 'self-idea-1',
-        at: Date.now(),
-        mine: true,
-        text: '消息会话cell需要能置顶',
-      },
-    ])
-    await new Promise((resolve) => setTimeout(resolve, 2200))
+    // Periodic scan is off: polling the state does not scan by itself.
+    const before = state.stats.lastScanAt
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     state = (await call(harness.routes, 'GET', '/state')).json.state
-    assert.equal(state.requirements.length, 0, 'GET /state must not scan by itself')
+    assert.equal(state.stats.lastScanAt, before, 'GET /state must not scan by itself')
 
-    // Turning the interval on starts the timed scan; the self note becomes a requirement.
+    // Turning the interval on starts the timed scan.
     const interval = await call(harness.routes, 'POST', '/action', {
       action: 'setScanInterval',
       ms: 1000,
     })
     assert.equal(interval.json.ok, true)
     assert.equal(interval.json.scanIntervalMs, 1000)
-    const found = await waitFor(async () => {
+    const ticked = await waitFor(async () => {
       const current = (await call(harness.routes, 'GET', '/state')).json.state
-      return current.requirements.some((item) => item.messageId === 'self-idea-1')
-    }, 6000)
-    assert.equal(found, true, 'periodic scan created the requirement')
-    state = (await call(harness.routes, 'GET', '/state')).json.state
-    const requirement = state.requirements.find((item) => item.messageId === 'self-idea-1')
-    assert.equal(requirement.title, '消息会话cell需要能置顶')
-    assert.equal(requirement.contact.self, true)
-    assert.equal(requirement.status, 'pending')
+      return current.stats.lastScanAt > before
+    }, 5000)
+    assert.equal(ticked, true, 'the periodic timer scanned')
 
     // Invalid values are rejected; 0 turns the timer off again.
     const invalid = await call(harness.routes, 'POST', '/action', {
@@ -350,6 +339,56 @@ test('the configurable periodic scan picks up a new self-chat note', async () =>
       ms: 0,
     })
     assert.equal(off.json.scanIntervalMs, 0)
+  } finally {
+    for (const dispose of harness.disposers.reverse()) {
+      try {
+        dispose()
+      } catch (error) {
+        /* ignore */
+      }
+    }
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('a Messages state change triggers an immediate scan even with the timer off', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-self-iteration-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  const chatState = writeSelfChatState(home, [])
+  const harness = makeHarness(home)
+  try {
+    apply(harness.ctx, {
+      enabled: true,
+      autoIterate: false,
+      scanIntervalMs: 0, // periodic timer explicitly off: only the file watch can react
+      workspaceRoot: home,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    let state = (await call(harness.routes, 'GET', '/state')).json.state
+    assert.equal(state.scanIntervalMs, 0)
+    assert.equal(state.watchActive, true, 'the Messages state watcher is active')
+
+    // Simulate the Messages plugin writing a new self-chat note.
+    writeSelfChatState(home, [
+      {
+        id: 'self-idea-watch',
+        at: Date.now(),
+        mine: true,
+        text: '消息图片太小，希望支持点击放大',
+      },
+    ])
+    const found = await waitFor(async () => {
+      const current = (await call(harness.routes, 'GET', '/state')).json.state
+      return current.requirements.some((item) => item.messageId === 'self-idea-watch')
+    }, 6000)
+    assert.equal(found, true, 'file watch triggered the scan without the periodic timer')
+    state = (await call(harness.routes, 'GET', '/state')).json.state
+    assert.equal(state.requirements[0].title, '消息图片太小，希望支持点击放大')
+    // The watch debounce is short; nothing here waits for a 5s tick.
+    assert.ok(state.stats.lastScanAt > 0)
   } finally {
     for (const dispose of harness.disposers.reverse()) {
       try {

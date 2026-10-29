@@ -1,6 +1,6 @@
 {
   "name": "@local/chat-room",
-  "version": "1.11.1",
+  "version": "1.11.2",
   "private": true,
   "type": "module",
   "description": "Message list for the Harness Web UI: every installation owns one inbox topic, so an add code is simply its id — paste the other person's code and start chatting. The Host half bridges both DSH instances through a public relay, so people on different networks can talk without exposing a port or signing up.",

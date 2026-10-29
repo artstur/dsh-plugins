@@ -247,9 +247,28 @@ window.__ModuleLoader__.load({
      * (and VERSION) when this plugin ships.
      * ------------------------------------------------------------------ */
 
-    const VERSION = '1.0.2';
+    const VERSION = '1.0.3';
 
     const CHANGELOG = [
+      {
+        version: '1.0.3',
+        at: '2026-10-29T23:29+08:00',
+        source: 'harness',
+        points: {
+          zh: [
+            '新增：新消息即时扫描——监听「消息」数据文件变化，写入后约 0.3 秒防抖立即扫描，不等定时周期',
+            '定时扫描保留为兜底（默认 5 秒），可在设置里改成 30 秒 / 1 分钟 / 5 分钟或关闭',
+            '手动「扫描需求」按钮仍然随时可用；GET /state 保持只读，扫描入口只有文件变化、定时器与手动按钮',
+            '说明：文件监听只读聊天数据，不改动聊天内容；监听失败时自动降级为 15 秒后重试',
+          ],
+          en: [
+            'New: immediate scan on new messages — the Messages state file is watched, and a change triggers a scan after a ~0.3s debounce instead of waiting for the timer',
+            'The periodic scan stays as a fallback (5s by default) and can be set to 30s / 1min / 5min or turned off in the settings',
+            'The manual Scan requests button still works at any time; GET /state stays read-only, and the only scan entries are file changes, the timer and the manual button',
+            'Note: the watch only reads the chat data and never changes it; a failed watch retries after 15 seconds',
+          ],
+        },
+      },
       {
         version: '1.0.2',
         at: '2026-10-29T23:05+08:00',
