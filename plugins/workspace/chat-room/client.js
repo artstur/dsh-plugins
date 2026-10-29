@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.11.0.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.11.2.tgz';
 
     /**
      * The stylesheet is injected once for the whole plugin, not by the panel:
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.11.0';
+    const CLIENT_BUILD = '1.11.2';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
