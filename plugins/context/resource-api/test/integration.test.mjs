@@ -15,7 +15,25 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const workspace = path.resolve(here, '..', '..');
+const monorepoLayout = process.env.DSH_PLUGIN_TEST_LAYOUT === 'monorepo';
+const workspace = process.env.DSH_PLUGIN_TEST_ROOT
+  ? path.resolve(process.env.DSH_PLUGIN_TEST_ROOT)
+  : path.resolve(here, '..', '..');
+const clients = monorepoLayout
+  ? {
+      registry: 'plugins/context/resource-api/client.js',
+      notes: 'plugins/workspace/notes-panel/client.js',
+      facechat: 'plugins/workspace/facechat-recorder/client.js',
+      chatRoom: 'plugins/workspace/chat-room/client.js',
+      consumer: 'plugins/context/knowledge-context-reference/client.js',
+    }
+  : {
+      registry: 'resource-api/client.js',
+      notes: 'notes-panel/client.js',
+      facechat: 'facechat-recorder/client.js',
+      chatRoom: 'chat-room/client.js',
+      consumer: 'knowledge-context-reference/client.js',
+    };
 
 const values = new Map();
 let captured = null;
@@ -179,17 +197,17 @@ globalThis.fetch = async (url) => {
   };
 };
 
-const registryPlugin = loadClient('resource-api/client.js');
+const registryPlugin = loadClient(clients.registry);
 assert.ok(registryPlugin, 'the registry bundle must be part of the workspace');
 registryPlugin.apply(makeContext());
 
 const service = windowShim.__dshResourceService;
 assert.ok(service, 'the registry publishes its service');
 
-const notesPlugin = loadClient('notes-panel/client.js');
-const facechatPlugin = loadClient('facechat-recorder/client.js');
-const chatRoomPlugin = loadClient('chat-room/client.js');
-const consumerPlugin = loadClient('knowledge-context-reference/client.js');
+const notesPlugin = loadClient(clients.notes);
+const facechatPlugin = loadClient(clients.facechat);
+const chatRoomPlugin = loadClient(clients.chatRoom);
+const consumerPlugin = loadClient(clients.consumer);
 
 const notesContext = notesPlugin ? makeContext() : null;
 if (notesPlugin) notesPlugin.apply(notesContext);

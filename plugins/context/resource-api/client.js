@@ -462,8 +462,21 @@ window.__ModuleLoader__.load({
             id: '@local/resource-api',
             title: { zh: '端侧资源接口', en: 'Device Resource API' },
             noteTitle: { zh: '端侧资源接口版本记录', en: 'Device Resource API version log' },
-            version: '1.0.0',
+            version: '1.0.1',
             entries: [
+              {
+                version: '1.0.1',
+                at: '2026-10-29T22:52+08:00',
+                source: 'codex',
+                points: {
+                  zh: [
+                    '跨插件集成测试兼容 dsh-plugins 分类式 monorepo，同时保留原工作区平铺目录测试',
+                  ],
+                  en: [
+                    'Made cross-plugin integration tests compatible with the categorized dsh-plugins monorepo while retaining the original flat-workspace checks',
+                  ],
+                },
+              },
               {
                 version: '1.0.0',
                 at: '2026-10-27T16:45+08:00',

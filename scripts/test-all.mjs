@@ -29,7 +29,15 @@ for (const item of manifest.plugins) {
     if (check.status !== 0) failed += 1;
   }
   if (pkg.scripts && pkg.scripts.test) {
-    const test = spawnSync('npm', ['test'], { cwd: dir, stdio: 'inherit' });
+    const test = spawnSync('npm', ['test'], {
+      cwd: dir,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        DSH_PLUGIN_TEST_ROOT: root,
+        DSH_PLUGIN_TEST_LAYOUT: 'monorepo',
+      },
+    });
     if (test.status !== 0) failed += 1;
   }
 }
