@@ -442,7 +442,7 @@ class ReleaseWatch {
 }
 
 /** One contact: a person and the inbox topic their messages arrive on. */
-function makeContact({ name, relay, peerInbox, peerId, auto, via, self }) {
+function makeContact({ name, relay, peerInbox, peerId, auto, via, self, pinned }) {
   return {
     id: randomUUID(),
     name: normalizeName(name),
@@ -453,6 +453,9 @@ function makeContact({ name, relay, peerInbox, peerId, auto, via, self }) {
     // A conversation with myself. It stays on this machine and never touches
     // the relay, so notes to myself cost nothing and arrive at once.
     self: self === true,
+    // Pinned conversations stay above the rest of the list. This is a display
+    // preference, so it changes no message and needs no relay round trip.
+    pinned: pinned === true,
     // How the contact appeared: 'code' (I added them), 'ping' (they added me),
     // 'message' (they wrote to me first) or 'self' (I started a chat with me).
     via:
@@ -633,6 +636,7 @@ class ContactsHost {
         peerId: typeof entry.peerId === 'string' ? entry.peerId : '',
         auto: entry.auto === true,
         self: entry.self === true,
+        pinned: entry.pinned === true,
         via:
           entry.via === 'code' ||
           entry.via === 'ping' ||
@@ -925,6 +929,7 @@ class ContactsHost {
       unnamed: !contact.name,
       auto: contact.auto === true,
       self: contact.self === true,
+      pinned: contact.pinned === true,
       via: contact.via || '',
       relay: contact.relay,
       short: shortRoom(contact.peerInbox),
@@ -1180,6 +1185,16 @@ class ContactsHost {
     const contact = this.find(contactId);
     if (!contact) return { ok: false, error: 'unknown-contact' };
     contact.name = normalizeName(name);
+    this.persist();
+    this.broadcastState();
+    return { ok: true, state: this.snapshot() };
+  }
+
+  /** Pins a conversation to the top of the list, or unpins it. */
+  setPinned(contactId, pinned) {
+    const contact = this.find(contactId);
+    if (!contact) return { ok: false, error: 'unknown-contact' };
+    contact.pinned = pinned === true;
     this.persist();
     this.broadcastState();
     return { ok: true, state: this.snapshot() };
@@ -2103,6 +2118,19 @@ class ContactsHost {
           return;
         }
         json(200, this.removeContact(body.id));
+        return;
+      }
+      if (req.method === 'POST' && suffix === '/contacts/pin') {
+        const body = await payload();
+        if (!body) {
+          json(400, { ok: false, error: 'bad-json' });
+          return;
+        }
+        if (typeof body.pinned !== 'boolean') {
+          json(400, { ok: false, error: 'bad-pin' });
+          return;
+        }
+        json(200, this.setPinned(body.id, body.pinned));
         return;
       }
       if (req.method === 'POST' && suffix === '/active') {

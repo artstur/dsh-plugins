@@ -247,9 +247,28 @@ window.__ModuleLoader__.load({
      * (and VERSION) when this plugin ships.
      * ------------------------------------------------------------------ */
 
-    const VERSION = '1.0.1';
+    const VERSION = '1.0.2';
 
     const CHANGELOG = [
+      {
+        version: '1.0.2',
+        at: '2026-10-29T23:05+08:00',
+        source: 'harness',
+        points: {
+          zh: [
+            '修复：「我聊」里自己写下的消息现在也算需求来源（此前 mine:true 被过滤，刚发的想法不会触发自驱动迭代）',
+            '新增：定时扫描间隔可配置（关闭 / 5 秒 / 30 秒 / 1 分钟 / 5 分钟），GET /state 保持只读，只有定时器和手动「扫描需求」会扫描',
+            '简化面板：头部只保留「扫描需求」主按钮与设置齿轮，自动迭代 / 试运行 / 定时扫描 / 补扫收进默认折叠的设置条',
+            '改进：手动创建需求默认收起；试运行等开关不再占据主界面，避免误触后静默挡住自动迭代',
+          ],
+          en: [
+            'Fixed: messages the user writes in the self chat 「我聊」 now count as requirements too (the old mine:true filter hid them, so a freshly written idea did not trigger an iteration)',
+            'New: the periodic scan interval is configurable (off / 5s / 30s / 1min / 5min); GET /state stays read-only, and only the timer or the manual Scan requests button scans',
+            'Simplified panel: the header keeps only the Scan requests button and a settings gear; auto iteration, dry run, periodic scan and history scan move into a collapsed settings strip',
+            'Improved: manual request creation is collapsed by default, and mode switches no longer sit on the main surface where they can silently block automatic iterations',
+          ],
+        },
+      },
       {
         version: '1.0.1',
         at: '2026-10-29T21:33+08:00',
