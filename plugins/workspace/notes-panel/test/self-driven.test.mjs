@@ -134,6 +134,15 @@ test('maps every self-driven label and renders 自驱动 / Self-driven', async (
   }
   assert.equal(api.changelogAuthor({ source: 'self-driven' }, 'zh'), '自驱动');
   assert.equal(api.changelogAuthor({ source: 'self-driven' }, 'en'), 'Self-driven');
+  // The executing Agent is shown in parentheses when the entry carries it.
+  assert.equal(
+    api.changelogAuthor({ source: 'self-driven', sourceName: '创造模式 · deepseek-flash' }, 'zh'),
+    '自驱动（创造模式 · deepseek-flash）',
+  );
+  assert.equal(
+    api.changelogAuthor({ source: 'self-driven', sourceName: '创造模式 · deepseek-flash' }, 'en'),
+    'Self-driven (创造模式 · deepseek-flash)',
+  );
 
   const entry = {
     version: '1.9.10',
@@ -380,4 +389,101 @@ test('queues filled before Notes loaded are drained without throwing', async () 
   assert.deepEqual(plain(api.drainSelfDrivenLogQueue()), [
     { ok: false, error: 'invalid-entry' },
   ]);
+});
+
+
+test('a self-driven entry carries its Agent and resolves the published package identity', async () => {
+  const REGISTRY_KEY = 'dsh.notes.plugin-logs.v1';
+  const NOTES_KEY = 'dsh.notes.v1';
+  const registry = {
+    version: 1,
+    plugins: {
+      'dsh-chat-room': {
+        id: 'dsh-chat-room',
+        title: { zh: '消息', en: 'Messages' },
+        noteTitle: { zh: '消息版本记录', en: 'Messages version log' },
+        version: '1.11.2',
+        entries: [
+          {
+            version: '1.11.2',
+            at: '2026-10-29T23:38+08:00',
+            source: 'self-driven',
+            points: { zh: ['置顶改成右键菜单'], en: ['Pin via context menu'] },
+          },
+        ],
+      },
+    },
+  };
+  const notes = {
+    version: 1,
+    notes: [
+      {
+        id: 'note-1',
+        title: '消息版本记录',
+        body:
+          '# 消息版本记录\n\n## v1.11.2 · 2026-10-29 23:38 +08:00 · 自驱动\n- 置顶改成右键菜单',
+        images: [],
+        pinned: false,
+        createdAt: 1,
+        updatedAt: 1,
+        system: 'plugin-version-log:dsh-chat-room',
+      },
+    ],
+    selectedId: 'note-1',
+  };
+  const storage = createStorage({
+    [NOTES_KEY]: JSON.stringify(notes),
+    [REGISTRY_KEY]: JSON.stringify(registry),
+  });
+  const { api } = await loadNotesApi(storage);
+  api.setLang('zh');
+
+  const result = api.appendSelfDrivenEntry({
+    pluginId: '@local/chat-room', // dev-link identity while the note belongs to dsh-chat-room
+    pluginName: { zh: '消息', en: 'Messages' },
+    version: '1.11.2',
+    at: '2026-10-29T23:38+08:00',
+    points: { zh: ['置顶改成右键菜单'], en: ['Pin via context menu'] },
+    agentName: '创造模式 · deepseek-flash',
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+
+  const snapshot = api.getStore().getSnapshot();
+  assert.equal(snapshot.notes.length, 1, 'no duplicate note for the second identity');
+  const note = snapshot.notes[0];
+  assert.equal(note.system, 'plugin-version-log:dsh-chat-room');
+  assert.ok(
+    note.body.includes(
+      '## v1.11.2 · 2026-10-29 23:38 +08:00 · 自驱动（创造模式 · deepseek-flash）',
+    ),
+    note.body,
+  );
+
+  // Extras live under both identities, so the canonical descriptor keeps the attribution.
+  const extras = JSON.parse(storage.getItem(EXTRAS_KEY)).entries;
+  assert.ok(extras['@local/chat-room'].entries[0].sourceName, 'dev-link extras carry the Agent');
+  assert.ok(extras['dsh-chat-room'].entries[0].sourceName, 'canonical extras carry the Agent');
+
+  api.registerPluginVersionLog({
+    id: 'dsh-chat-room',
+    title: { zh: '消息', en: 'Messages' },
+    noteTitle: { zh: '消息版本记录', en: 'Messages version log' },
+    version: '1.11.2',
+    entries: [
+      {
+        version: '1.11.2',
+        at: '2026-10-29T23:38+08:00',
+        source: 'self-driven',
+        points: { zh: ['置顶改成右键菜单'], en: ['Pin via context menu'] },
+      },
+    ],
+  });
+  const after = api
+    .getStore()
+    .getSnapshot()
+    .notes.find((item) => item.system === 'plugin-version-log:dsh-chat-room');
+  assert.ok(
+    after.body.includes('自驱动（创造模式 · deepseek-flash）'),
+    'canonical descriptor registration keeps the Agent attribution: ' + after.body,
+  );
 });

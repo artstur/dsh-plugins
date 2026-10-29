@@ -46,10 +46,18 @@ function makeHarness(home) {
   const routes = []
   const tools = new Map()
   const agentStatus = new Map()
+  const inspections = new Map()
   const controller = {
     creates: [],
     prompts: [],
     renamed: [],
+    async inspect(sessionId) {
+      return inspections.get(sessionId) || {
+        meta: { agentPreset: 'cordis' },
+        inheritedEventCount: 0,
+        events: [],
+      }
+    },
     async create(request) {
       this.creates.push(request)
       const sessionId = 'session-' + this.creates.length
@@ -96,7 +104,7 @@ function makeHarness(home) {
       return () => {}
     },
   }
-  return { ctx, routes, tools, controller, agentStatus, disposers }
+  return { ctx, routes, tools, controller, agentStatus, inspections, disposers }
 }
 
 function makeRequest(method, suffix, body) {
@@ -221,7 +229,15 @@ test('Host half drives one full dry-run → start → report → auto-pump cycle
         points_zh: ['图片支持点击放大预览'],
         points_en: ['Images open in a zoomable preview'],
       },
-      { agent: { id: 'session-1' } },
+      {
+        agent: {
+          id: 'session-1',
+          session: {
+            header: { agentPreset: 'cordis' },
+            requestHeader: () => ({ config: { provider: 'deepseek-account', model: 'deepseek-flash' } }),
+          },
+        },
+      },
     )
     assert.equal(done.ok, true)
     state = (await call(harness.routes, 'GET', '/state')).json.state
@@ -230,6 +246,9 @@ test('Host half drives one full dry-run → start → report → auto-pump cycle
     assert.equal(doneRequirement.iteration.pluginId, '@local/chat-room')
     assert.equal(doneRequirement.iteration.version, '1.9.10')
     assert.equal(doneRequirement.iteration.noteApplied, false)
+    assert.equal(doneRequirement.iteration.agent.preset, 'cordis')
+    assert.equal(doneRequirement.iteration.agent.model, 'deepseek-flash')
+    assert.equal(doneRequirement.iteration.agent.label.zh, '创造模式 · deepseek-flash')
     const second = await report.execute(
       { requirement_id: requirement.id, outcome: 'done', target_plugin: '@local/chat-room', version: '1.9.10' },
       { agent: { id: 'session-1' } },
@@ -389,6 +408,93 @@ test('a Messages state change triggers an immediate scan even with the timer off
     assert.equal(state.requirements[0].title, '消息图片太小，希望支持点击放大')
     // The watch debounce is short; nothing here waits for a 5s tick.
     assert.ok(state.stats.lastScanAt > 0)
+  } finally {
+    for (const dispose of harness.disposers.reverse()) {
+      try {
+        dispose()
+      } catch (error) {
+        /* ignore */
+      }
+    }
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('startup backfills the Agent attribution of existing iterations from their Session logs', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-self-iteration-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  writeSelfChatState(home, [])
+  const stateDir = path.join(home, 'plugin-data', 'self-iteration')
+  fs.mkdirSync(stateDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(stateDir, 'state.json'),
+    JSON.stringify({
+      version: 1,
+      createdAt: Date.now() - 60_000,
+      installTime: Date.now() - 60_000,
+      enabled: true,
+      autoIterate: false,
+      dryRun: false,
+      scanIntervalMs: 0,
+      requirements: [
+        {
+          id: 'req-old',
+          title: '旧迭代',
+          text: '旧迭代',
+          contact: { id: 'c1', name: '问号' },
+          messageId: 'm-old',
+          receivedAt: Date.now() - 30_000,
+          detectedAt: Date.now() - 30_000,
+          status: 'done',
+          sessionId: 'session-old',
+          finishedAt: Date.now() - 20_000,
+          iteration: {
+            pluginId: '@local/chat-room',
+            pluginName: { zh: '消息', en: 'Messages' },
+            version: '1.10.0',
+            summary: { zh: '旧', en: 'old' },
+            points: { zh: ['旧'], en: ['old'] },
+            recordedAt: Date.now() - 20_000,
+            noteApplied: true,
+          },
+        },
+      ],
+      running: null,
+      seen: {},
+      stats: { lastScanAt: 0, noteSync: null, lastError: '' },
+    }),
+    'utf8',
+  )
+  const harness = makeHarness(home)
+  harness.inspections.set('session-old', {
+    meta: { agentPreset: 'cordis' },
+    inheritedEventCount: 0,
+    events: [
+      {
+        type: 'request/header',
+        seq: 1,
+        time: Date.now() - 25_000,
+        data: { header: { config: { provider: 'deepseek-account', model: 'deepseek-flash' } }, reason: 'initial' },
+      },
+    ],
+  })
+  try {
+    apply(harness.ctx, { enabled: true, autoIterate: false, scanIntervalMs: 0, workspaceRoot: home })
+    const found = await waitFor(async () => {
+      const current = (await call(harness.routes, 'GET', '/state')).json.state
+      const requirement = current.requirements.find((item) => item.id === 'req-old')
+      return requirement && requirement.iteration && requirement.iteration.agent
+    }, 5000)
+    assert.equal(found, true, 'backfill ran on startup')
+    const state = (await call(harness.routes, 'GET', '/state')).json.state
+    const requirement = state.requirements.find((item) => item.id === 'req-old')
+    assert.equal(requirement.iteration.agent.preset, 'cordis')
+    assert.equal(requirement.iteration.agent.model, 'deepseek-flash')
+    assert.equal(requirement.iteration.agent.label.zh, '创造模式 · deepseek-flash')
+    assert.equal(requirement.iteration.noteApplied, false, 'the note is re-written with attribution')
   } finally {
     for (const dispose of harness.disposers.reverse()) {
       try {

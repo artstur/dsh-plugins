@@ -157,6 +157,14 @@ function createState() {
             zh: ['支持灯箱预览'],
             en: ['Adds a lightbox preview'],
           },
+          agent: {
+            id: 'session-123',
+            preset: 'cordis',
+            presetLabel: { zh: '创造模式', en: 'Creation mode' },
+            provider: 'deepseek-account',
+            model: 'deepseek-flash',
+            label: { zh: '创造模式 · deepseek-flash', en: 'Creation mode · deepseek-flash' },
+          },
           recordedAt: localTime(29, 21, 55),
           noteApplied: false,
         },
@@ -292,8 +300,11 @@ test('builds the Chinese aggregate note for a mixed requirement set', async () =
   assert.ok(body.includes('- **点击图片无法放大**（问号 · 2026-10-28 23:13）'));
   assert.ok(body.includes('  - 迭代中：session-123 · 2026-10-29 21:20 开始'));
 
-  // Done item carries target plugin, version, recorded time and attribution.
-  assert.ok(body.includes('  - 「消息」v1.9.10 · 2026-10-29 21:55 · 自驱动'));
+  // Done item carries target plugin, version, recorded time and the Agent attribution.
+  assert.ok(
+    body.includes('  - 「消息」v1.9.10 · 2026-10-29 21:55 · 自驱动（创造模式 · deepseek-flash）'),
+    body,
+  );
   assert.ok(body.includes('  - 点击消息里的图片会打开灯箱预览，可缩放、可关闭'));
 
   // Queued items are newest first inside their group.
@@ -350,6 +361,17 @@ test('formats minute-precise +08:00 timestamps and elapsed times', async () => {
   assert.equal(api.formatElapsed(3720000, 'en'), '1h 2m');
 });
 
+test('keeps the plain 自驱动 attribution when the iteration has no Agent info', async () => {
+  const api = await loadClientApi();
+  const state = createState();
+  const done = state.requirements.find((requirement) => requirement.id === 'req-done');
+  delete done.iteration.agent;
+  const body = api.buildAggregateNote(state, 'zh');
+  assert.ok(body.includes('  - 「消息」v1.9.10 · 2026-10-29 21:55 · 自驱动'), body);
+  assert.ok(!body.includes('自驱动（'), 'no parentheses without an Agent');
+  assert.equal(api.buildSelfDrivenEntry(done, 'zh').agentName, '');
+});
+
 test('builds the append payload for the target plugin note', async () => {
   const api = await loadClientApi();
   const state = createState();
@@ -362,12 +384,14 @@ test('builds the append payload for the target plugin note', async () => {
     version: '1.9.10',
     at: '2026-10-29T21:55+08:00',
     points: { zh: ['支持灯箱预览'], en: ['Adds a lightbox preview'] },
+    agentName: '创造模式 · deepseek-flash',
     requirementId: 'req-done',
   });
 
   const english = api.buildSelfDrivenEntry(done, 'en');
   assert.equal(english.pluginName.en, 'Messages');
   assert.equal(english.at, '2026-10-29T21:55+08:00');
+  assert.equal(english.agentName, 'Creation mode · deepseek-flash');
 });
 
 test('builds action and reportNote payloads', async () => {

@@ -38,6 +38,35 @@ import {
   summarizePluginInventory,
 } from './logic.js'
 
+/** Human labels for the bundled Agent presets (cordis = 创造模式). */
+const PRESET_LABELS = {
+  cordis: { zh: '创造模式', en: 'Creation mode' },
+  standard: { zh: '标准模式', en: 'Standard mode' },
+  ptc: { zh: 'PTC 模式', en: 'PTC mode' },
+  minimal: { zh: '极简模式', en: 'Minimal mode' },
+}
+
+function presetLabels(preset) {
+  return PRESET_LABELS[preset] || { zh: preset || 'Agent', en: preset || 'Agent' }
+}
+
+/**
+ * Which Agent completed an iteration: preset, provider and model. This is what
+ * the notes show after 「自驱动」, e.g. `自驱动（创造模式 · deepseek-flash）`.
+ */
+function buildAgentInfo({ id, preset, provider, model }) {
+  const label = presetLabels(preset)
+  const suffix = model ? ' · ' + model : ''
+  return {
+    id: id || '',
+    preset: preset || '',
+    presetLabel: label,
+    provider: provider || '',
+    model: model || '',
+    label: { zh: label.zh + suffix, en: label.en + suffix },
+  }
+}
+
 /** Same-origin HTTP prefix served to the Client half. */
 export const ROUTE_PREFIX = '/plugin/self-iteration'
 /** Where this plugin keeps its own state (not another plugin's data file). */
@@ -432,6 +461,80 @@ export function apply(ctx, rawConfig) {
 
   /* ---------------- Creation-mode Agent driver ---------------- */
 
+  /** Read preset/model from a live Agent (the one that just called the report tool). */
+  function describeLiveAgent(agent) {
+    let preset = ''
+    let provider = ''
+    let model = ''
+    try {
+      preset = String(agent?.session?.header?.agentPreset || '')
+    } catch (error) {
+      /* session header unavailable */
+    }
+    try {
+      const header = agent?.session?.requestHeader?.()
+      if (header && header.config) {
+        provider = String(header.config.provider || '')
+        model = String(header.config.model || '')
+      }
+    } catch (error) {
+      /* no model request recorded yet */
+    }
+    return buildAgentInfo({
+      id: agent?.id ? String(agent.id) : '',
+      preset: preset || config.agentPreset,
+      provider,
+      model,
+    })
+  }
+
+  /**
+   * Iterations that finished before Agent attribution was recorded get their
+   * attribution recovered from their persisted Session log (preset from the
+   * header, model from the first request/header event). Their notes are then
+   * re-written so existing 「自驱动」 headings gain the Agent name.
+   */
+  async function backfillAgentAttribution() {
+    const controller = ctx.get('sessionController')
+    if (!controller || typeof controller.inspect !== 'function') return
+    let changed = 0
+    for (const requirement of state.requirements) {
+      const iteration = requirement.iteration
+      if (!iteration || iteration.agent || !requirement.sessionId) continue
+      try {
+        const inspection = await controller.inspect(requirement.sessionId)
+        const preset =
+          (inspection && inspection.meta && inspection.meta.agentPreset) || config.agentPreset
+        let provider = ''
+        let model = ''
+        const events = inspection && Array.isArray(inspection.events) ? inspection.events : []
+        for (const event of events) {
+          if (!event || event.type !== 'request/header') continue
+          const header = event.data && event.data.header
+          if (header && header.config) {
+            provider = String(header.config.provider || '')
+            model = String(header.config.model || '')
+          }
+          if (model) break
+        }
+        iteration.agent = buildAgentInfo({
+          id: requirement.sessionId,
+          preset,
+          provider,
+          model,
+        })
+        if (iteration.noteApplied) iteration.noteApplied = false
+        changed += 1
+      } catch (error) {
+        // The Session log may be gone; keep the plain 自驱动 label.
+      }
+    }
+    if (changed > 0) {
+      persist()
+      logger?.info?.('self-iteration: backfilled Agent attribution for %d iteration(s)', changed)
+    }
+  }
+
   function pluginInventory() {
     const now = Date.now()
     if (inventoryCache.at && now - inventoryCache.at < 60_000) return inventoryCache.value
@@ -778,6 +881,7 @@ export function apply(ctx, rawConfig) {
                 zh: sanitizePoints(args.points_zh, summaryZh),
                 en: sanitizePoints(args.points_en, summaryEn || summaryZh),
               },
+              agent: describeLiveAgent(exec && exec.agent),
               recordedAt: now,
               noteApplied: false,
             }
@@ -975,6 +1079,20 @@ export function apply(ctx, rawConfig) {
         if (!requirement || !requirement.iteration) return { ok: false, error: 'no-note' }
         return { ok: true, noteTitle: noteTitleFor(requirement) }
       }
+      case 'resyncNotes': {
+        // Force the browser half to re-append every recorded iteration (used
+        // after note-format or attribution changes, and safe because appends
+        // are idempotent by version).
+        let count = 0
+        for (const requirement of state.requirements) {
+          if (requirement.iteration) {
+            requirement.iteration.noteApplied = false
+            count += 1
+          }
+        }
+        persist()
+        return { ok: true, count }
+      }
       case 'reportNote': {
         const report = body && body.report && typeof body.report === 'object' ? body.report : null
         if (!report) return { ok: false, error: 'missing-report' }
@@ -1094,6 +1212,7 @@ export function apply(ctx, rawConfig) {
       if (stopped) return
       scanMessages({})
       void pump()
+      void backfillAgentAttribution()
     }, 1500)
     if (typeof startup.unref === 'function') startup.unref()
     return () => {
