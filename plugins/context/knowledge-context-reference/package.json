@@ -1,0 +1,30 @@
+{
+  "name": "@local/knowledge-context-reference",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Global # references for asking DeepSeek Harness about local Notes and Facechat content.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

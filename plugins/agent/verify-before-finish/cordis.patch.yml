@@ -1,0 +1,3 @@
+- insert:
+    - id: verify-before-finish
+      name: '@local/verify-before-finish'

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "端侧资源接口",
+    "description": "把各插件留在本机的内容统一成一套接口：所有已注册的 Provider 共用 resource.search 与 resource.read，笔记、逐字稿和消息因此成为同一个可寻址空间，而不是每个插件各自为政的存储。"
+  }
+}

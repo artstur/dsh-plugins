@@ -1,0 +1,29 @@
+{
+  "name": "@local/loop-trajectory",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "description": "A compact horizontal view of the current DeepSeek Harness agent loop, projected from the official ui-trajectory session data.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "repository": "artstur/dsh-plugins",
+  "plugins": [
+    {
+      "source": "notes-panel",
+      "path": "plugins/workspace/notes-panel",
+      "group": "workspace",
+      "name": "@local/notes-panel",
+      "version": "1.15.1",
+      "description": "Harness Web UI 笔记面板：直接编辑渲染后的 Markdown，支持表格、图片、自动保存、插件版本日志和版本化分享快照。"
+    },
+    {
+      "source": "facechat-recorder",
+      "path": "plugins/workspace/facechat-recorder",
+      "group": "workspace",
+      "name": "@local/facechat-recorder",
+      "version": "1.3.0",
+      "description": "Face-to-face conversation recorder panel: near-real-time transcription, automatic speaker separation with merge correction, a transcript glossary for technical terms, identity-aware summaries, model preparation and Markdown export."
+    },
+    {
+      "source": "chat-room",
+      "path": "plugins/workspace/chat-room",
+      "group": "workspace",
+      "name": "@local/chat-room",
+      "version": "1.10.0",
+      "description": "Message list for the Harness Web UI: every installation owns one inbox topic, so an add code is simply its id — paste the other person's code and start chatting. The Host half bridges both DSH instances through a public relay, so people on different networks can talk without exposing a port or signing up."
+    },
+    {
+      "source": "pomodoro-timer",
+      "path": "plugins/workspace/pomodoro-timer",
+      "group": "workspace",
+      "name": "@local/pomodoro-timer",
+      "version": "1.0.0",
+      "description": "Ambient pomodoro timer below the message composer."
+    },
+    {
+      "source": "exploration-atlas",
+      "path": "plugins/workspace/exploration-atlas",
+      "group": "workspace",
+      "name": "@local/exploration-atlas",
+      "version": "1.1.2",
+      "description": "A clear system map of DSH exploration: six causal stages, seven capability dimensions, real evidence, and next experiments."
+    },
+    {
+      "source": "resource-api",
+      "path": "plugins/context/resource-api",
+      "group": "context",
+      "name": "@local/resource-api",
+      "version": "1.0.0",
+      "description": "Unified device-side resource interface for Harness plugins: one resource.search / resource.read API over every plugin that registers a Provider, so notes, transcripts and messages become one addressable space."
+    },
+    {
+      "source": "knowledge-context-reference",
+      "path": "plugins/context/knowledge-context-reference",
+      "group": "context",
+      "name": "@local/knowledge-context-reference",
+      "version": "1.4.0",
+      "description": "Global # references for asking DeepSeek Harness about local Notes and Facechat content."
+    },
+    {
+      "source": "quick-ask",
+      "path": "plugins/context/quick-ask",
+      "group": "context",
+      "name": "@local/quick-ask",
+      "version": "1.3.15",
+      "description": "Option+7 Quick Ask for DSH, with macOS cross-app activation and opt-in, previewable foreground accessibility context."
+    },
+    {
+      "source": "loop-trajectory",
+      "path": "plugins/agent/loop-trajectory",
+      "group": "agent",
+      "name": "@local/loop-trajectory",
+      "version": "1.0.1",
+      "description": "A compact horizontal view of the current DeepSeek Harness agent loop, projected from the official ui-trajectory session data."
+    },
+    {
+      "source": "verify-before-finish",
+      "path": "plugins/agent/verify-before-finish",
+      "group": "agent",
+      "name": "@local/verify-before-finish",
+      "version": "1.0.0",
+      "description": "Adds a Verify-before-Finish stage to the default agent loop: a turn that changed files without verification evidence is sent back for one more step."
+    },
+    {
+      "source": "access-auto-approval",
+      "path": "plugins/agent/access-auto-approval",
+      "group": "agent",
+      "name": "@local/access-auto-approval",
+      "version": "1.1.0",
+      "description": "Automatically approves DSH access requests, delegating plugin removal to the user."
+    },
+    {
+      "source": "self-iteration",
+      "path": "plugins/agent/self-iteration",
+      "group": "agent",
+      "name": "@local/self-iteration",
+      "version": "1.0.1",
+      "description": "自驱动迭代：读取「消息」里收到的 DSH 插件反馈，自动生成迭代需求，用创造模式的主 Agent 完成迭代，并把迭代记录以「自驱动」来源写进对应插件的笔记。"
+    }
+  ]
+}

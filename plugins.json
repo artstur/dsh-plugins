@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "id": "workspace",
+      "title": "Workspace experiences",
+      "description": "User-facing surfaces that capture, retain or present work."
+    },
+    {
+      "id": "context",
+      "title": "Context and protocols",
+      "description": "Shared resource contracts, references and ambient invocation."
+    },
+    {
+      "id": "agent",
+      "title": "Agent runtime",
+      "description": "Policies, observability, permissions and self-iteration."
+    }
+  ],
+  "plugins": [
+    { "source": "notes-panel", "path": "plugins/workspace/notes-panel", "group": "workspace" },
+    { "source": "facechat-recorder", "path": "plugins/workspace/facechat-recorder", "group": "workspace" },
+    { "source": "chat-room", "path": "plugins/workspace/chat-room", "group": "workspace" },
+    { "source": "pomodoro-timer", "path": "plugins/workspace/pomodoro-timer", "group": "workspace" },
+    { "source": "exploration-atlas", "path": "plugins/workspace/exploration-atlas", "group": "workspace" },
+
+    { "source": "resource-api", "path": "plugins/context/resource-api", "group": "context" },
+    { "source": "knowledge-context-reference", "path": "plugins/context/knowledge-context-reference", "group": "context" },
+    { "source": "quick-ask", "path": "plugins/context/quick-ask", "group": "context" },
+
+    { "source": "loop-trajectory", "path": "plugins/agent/loop-trajectory", "group": "agent" },
+    { "source": "verify-before-finish", "path": "plugins/agent/verify-before-finish", "group": "agent" },
+    { "source": "access-auto-approval", "path": "plugins/agent/access-auto-approval", "group": "agent" },
+    { "source": "self-iteration", "path": "plugins/agent/self-iteration", "group": "agent" }
+  ]
+}

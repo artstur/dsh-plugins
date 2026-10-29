@@ -1,0 +1,3 @@
+- insert:
+    - id: facechat-recorder
+      name: '@local/facechat-recorder'

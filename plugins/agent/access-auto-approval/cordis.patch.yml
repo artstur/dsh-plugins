@@ -1,0 +1,3 @@
+- insert:
+    - id: access-auto-approval
+      name: '@local/access-auto-approval'

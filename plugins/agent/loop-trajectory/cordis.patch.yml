@@ -1,0 +1,3 @@
+- insert:
+    - id: loop-trajectory
+      name: '@local/loop-trajectory'

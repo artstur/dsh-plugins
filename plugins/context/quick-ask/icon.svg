@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="qa-card" x1="14" y1="10" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5B9BFF"/>
+      <stop offset="1" stop-color="#2F6BD8"/>
+    </linearGradient>
+  </defs>
+  <rect x="9" y="13" width="46" height="38" rx="11" fill="url(#qa-card)"/>
+  <path d="M20 27h14M20 35h9" stroke="#F5F8FF" stroke-width="4" stroke-linecap="round"/>
+  <path d="M38 27.5c1.6 3.2 3.1 4.7 6.3 6.3-3.2 1.6-4.7 3.1-6.3 6.3-1.6-3.2-3.1-4.7-6.3-6.3 3.2-1.6 4.7-3.1 6.3-6.3Z" fill="#F5F8FF"/>
+  <rect x="33" y="43" width="22" height="15" rx="5" fill="#12213D" stroke="#F5F8FF" stroke-width="2.5"/>
+  <text x="44" y="54.6" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, sans-serif" font-size="11.5" font-weight="700" fill="#F5F8FF">7</text>
+</svg>

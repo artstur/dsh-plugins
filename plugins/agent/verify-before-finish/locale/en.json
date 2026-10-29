@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Verify before Finish",
+    "description": "Adds a Verify-before-Finish stage to the default agent loop. A turn that changed files without verification evidence — no test, lint, type check, build, or read-back — is sent back for one more step instead of closing."
+  }
+}

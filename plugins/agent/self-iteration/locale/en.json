@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Self-driven Iteration",
+    "description": "Reads feedback received in the Messages plugin, turns it into plugin iteration requests, completes them with the creation-mode main Agent, writes each result into the target plugin's version log with the Self-driven source, and collects all requests in one automatically maintained note. The sidebar panel lists, creates, starts and dismisses requests and shows scan and note-sync status."
+  }
+}

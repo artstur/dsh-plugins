@@ -1,0 +1,37 @@
+{
+  "name": "@local/quick-ask",
+  "version": "1.3.15",
+  "private": true,
+  "type": "module",
+  "description": "Option+7 Quick Ask for DSH, with macOS cross-app activation and opt-in, previewable foreground accessibility context.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build:native": "node tools/build-native.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "native/QuickAskHelper.swift",
+    "native/QuickAskHelper.app",
+    "tools/build-native.mjs",
+    "test/*.test.mjs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

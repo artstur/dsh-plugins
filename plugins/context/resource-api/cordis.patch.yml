@@ -1,0 +1,3 @@
+- insert:
+    - id: resource-api
+      name: '@local/resource-api'

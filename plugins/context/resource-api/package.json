@@ -1,0 +1,34 @@
+{
+  "name": "@local/resource-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unified device-side resource interface for Harness plugins: one resource.search / resource.read API over every plugin that registers a Provider, so notes, transcripts and messages become one addressable space.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "templates/*.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@local/notes-panel",
+  "version": "1.15.1",
+  "private": true,
+  "type": "module",
+  "description": "Harness Web UI 笔记面板：直接编辑渲染后的 Markdown，支持表格、图片、自动保存、插件版本日志和版本化分享快照。",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "templates/*.js",
+    "tools/*.mjs"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

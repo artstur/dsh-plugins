@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Notes",
+    "description": "A notebook panel in the main column with a note list, editor, Markdown preview with tables, adjustable body text size, search, autosave, images, per-plugin version logs, and share snapshots. Notes are kept in this browser."
+  }
+}
