@@ -66,12 +66,13 @@ test('resolveConfig clamps numeric config and keeps booleans', () => {
     scanIntervalMs: 10,
     extraKeywords: [' 图片 ', 42, ''],
     agentPreset: ' cordis ',
+    scanIntervalMs: 0,
   })
   assert.equal(config.enabled, false)
   assert.equal(config.autoIterate, true) // not a boolean -> default
   assert.equal(config.maxPerHour, 20)
   assert.equal(config.lookbackHours, 0)
-  assert.equal(config.scanIntervalMs, 1000)
+  assert.equal(config.scanIntervalMs, 0) // 0 disables the periodic scan
   assert.deepEqual(config.extraKeywords, ['图片'])
   assert.equal(config.agentPreset, 'cordis')
 })
@@ -102,6 +103,43 @@ test('extractIncomingMessages reads contacts/threads and drops self/pending/fail
   assert.equal(messages[0].contactName, 'Vict')
 })
 
+test('extractIncomingMessages includes the user\'s own notes from the self chat 「我聊」', () => {
+  const chat = {
+    contacts: [
+      { id: 'self', name: '我聊', self: true },
+      { id: 'c1', name: '问号', self: false },
+    ],
+    threads: {
+      self: [
+        { id: 's1', at: 2000, mine: true, text: '消息会话cell需要能置顶' },
+        { id: 's2', at: 2100, mine: false, text: '也可以写给自己' },
+      ],
+      c1: [
+        { id: 'm1', at: 1000, mine: true, text: '我改一下' },
+        { id: 'm2', at: 1100, mine: false, text: '图片看不到' },
+      ],
+    },
+  }
+  const messages = extractIncomingMessages(chat)
+  assert.deepEqual(
+    messages.map((message) => message.id),
+    ['m2', 's1', 's2'],
+  )
+  const selfMessage = messages.find((message) => message.id === 's1')
+  assert.equal(selfMessage.contactSelf, true)
+  assert.equal(selfMessage.selfThread, true)
+  // Own messages in a normal conversation are still excluded.
+  assert.equal(messages.some((message) => message.id === 'm1'), false)
+})
+
+test('detects the self-chat requirement 「消息会话cell需要能置顶」', () => {
+  const verdict = detectIdea('消息会话cell需要能置顶')
+  assert.equal(verdict.matched, true)
+  assert.ok(verdict.signals.includes('request'))
+  assert.ok(verdict.signals.includes('context'))
+  assert.equal(verdict.title, '消息会话cell需要能置顶')
+})
+
 test('extractIncomingMessages tolerates a missing or malformed state', () => {
   assert.deepEqual(extractIncomingMessages(null), [])
   assert.deepEqual(extractIncomingMessages({}), [])
@@ -120,6 +158,42 @@ test('buildRequirement keeps the source message and truncates text', () => {
   assert.equal(requirement.contact.name, '问号')
   assert.equal(requirement.text.length, 100)
   assert.equal(requirement.status, 'pending')
+})
+
+test('buildRequirement keeps the self-chat contact flag', () => {
+  const requirement = buildRequirement(
+    {
+      id: 's1',
+      at: 42,
+      text: '消息会话cell需要能置顶',
+      contactId: 'self',
+      contactName: '我聊',
+      contactSelf: true,
+      selfThread: true,
+    },
+    { now: 100, id: 'req-self' },
+  )
+  assert.equal(requirement.contact.self, true)
+  assert.equal(requirement.contact.name, '我聊')
+})
+
+test('buildIterationPrompt marks a self-chat request as the user\'s direct note', () => {
+  const prompt = buildIterationPrompt({
+    requirement: {
+      id: 'req-self',
+      text: '消息会话cell需要能置顶',
+      receivedAt: Date.parse('2026-10-29T14:53:00Z'),
+      contact: { id: 'self', name: '我聊', self: true },
+    },
+    workspaceRoot: '/ws',
+    plugins: [{ name: '@local/chat-room', dir: 'chat-room', description: '消息插件' }],
+    config: { ...DEFAULT_CONFIG, timeZone: 'Asia/Shanghai' },
+  })
+  assert.ok(prompt.includes('「我聊」'))
+  assert.ok(prompt.includes('It is a direct'))
+  assert.ok(prompt.includes('request from the user'))
+  assert.ok(prompt.includes('消息会话cell需要能置顶'))
+  assert.ok(prompt.includes('written by the user themselves'))
 })
 
 test('canStartIteration enforces one-at-a-time, hourly cap and cooldown', () => {

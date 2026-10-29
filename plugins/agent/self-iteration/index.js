@@ -92,6 +92,7 @@ function createState(config) {
     enabled: config.enabled,
     autoIterate: config.autoIterate,
     dryRun: config.dryRun,
+    scanIntervalMs: config.scanIntervalMs,
     requirements: [],
     running: null,
     seen: {},
@@ -111,6 +112,9 @@ function loadState(config) {
     if (typeof raw.enabled === 'boolean') state.enabled = raw.enabled
     if (typeof raw.autoIterate === 'boolean') state.autoIterate = raw.autoIterate
     if (typeof raw.dryRun === 'boolean') state.dryRun = raw.dryRun
+    if (Number.isFinite(raw.scanIntervalMs)) {
+      state.scanIntervalMs = Math.min(600000, Math.max(0, Math.round(raw.scanIntervalMs)))
+    }
     if (Array.isArray(raw.requirements)) state.requirements = raw.requirements.filter((item) => item && typeof item.id === 'string')
     if (raw.running && typeof raw.running === 'object' && typeof raw.running.requirementId === 'string') {
       state.running = {
@@ -760,6 +764,7 @@ export function apply(ctx, rawConfig) {
       autoIterate: state.autoIterate,
       dryRun: state.dryRun,
       agentPreset: config.agentPreset,
+      scanIntervalMs: Number.isFinite(state.scanIntervalMs) ? state.scanIntervalMs : config.scanIntervalMs,
       workspaceRoot,
       running: state.running
         ? {
@@ -804,6 +809,13 @@ export function apply(ctx, rawConfig) {
         persist()
         if (state.autoIterate) void pump()
         return { ok: true, autoIterate: state.autoIterate }
+      }
+      case 'setScanInterval': {
+        const ms = Number(body && body.ms)
+        if (!Number.isFinite(ms)) return { ok: false, error: 'invalid-interval' }
+        state.scanIntervalMs = Math.min(600000, Math.max(0, Math.round(ms)))
+        persist()
+        return { ok: true, scanIntervalMs: state.scanIntervalMs }
       }
       case 'setDryRun': {
         state.dryRun = body && body.enabled === true
@@ -955,7 +967,6 @@ export function apply(ctx, rawConfig) {
     }
     try {
       if (req.method === 'GET' && (suffix === '/state' || suffix === '/')) {
-        scanMessages({})
         sendJson(res, 200, { ok: true, state: snapshot() })
         return
       }
@@ -983,12 +994,18 @@ export function apply(ctx, rawConfig) {
   /* ---------------- Lifecycle ---------------- */
 
   ctx.effect(() => {
+    // One cheap tick drives both the periodic message scan and the Agent poll.
+    // The scan interval is configurable at runtime (0 disables it), so the
+    // panel's 定时扫描 setting applies without a reload.
     const timer = setInterval(() => {
       if (stopped) return
       const now = Date.now()
-      if (now - state.stats.lastScanAt >= config.scanIntervalMs) scanMessages({})
+      const scanInterval = Number.isFinite(state.scanIntervalMs)
+        ? state.scanIntervalMs
+        : config.scanIntervalMs
+      if (scanInterval > 0 && now - state.stats.lastScanAt >= scanInterval) scanMessages({})
       pollRunningAgent()
-    }, Math.min(config.scanIntervalMs, config.agentPollIntervalMs))
+    }, 1000)
     if (typeof timer.unref === 'function') timer.unref()
     const startup = setTimeout(() => {
       if (stopped) return

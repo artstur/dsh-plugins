@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Self-driven Iteration",
-    "description": "Reads feedback received in the Messages plugin, turns it into plugin iteration requests, completes them with the creation-mode main Agent, writes each result into the target plugin's version log with the Self-driven source, and collects all requests in one automatically maintained note. The sidebar panel lists, creates, starts and dismisses requests and shows scan and note-sync status."
+    "description": "Reads feedback received in the Messages plugin, turns it into plugin iteration requests, completes them with the creation-mode main Agent, writes each result into the target plugin's version log with the Self-driven source, and collects all requests in one automatically maintained note. The sidebar panel keeps a single Scan requests button in its header; auto iterate, dry run and the timed scan live behind the gear settings and can be set to off / 5s / 30s / 1 min / 5 min."
   }
 }

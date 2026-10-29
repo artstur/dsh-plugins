@@ -38,6 +38,12 @@ const TEST_EXPORTS = [
   'requirementKey',
   'escapeInline',
   'pendingSelfDrivenRequirements',
+  'DEFAULT_SCAN_INTERVAL_MS',
+  'SCAN_INTERVAL_CHOICES',
+  'PANEL_DEFAULTS',
+  'effectiveScanInterval',
+  'scanIntervalOptionKey',
+  'formatScanInterval',
 ];
 
 async function loadClientApi() {
@@ -217,6 +223,57 @@ test('zh/en dictionaries expose identical key sets', async () => {
   assert.deepEqual(Object.keys(api.DICTS.zh).sort(), Object.keys(api.DICTS.en).sort());
 });
 
+test('timed-scan choices and labels match the settings strip', async () => {
+  const api = await loadClientApi();
+  assert.equal(api.DEFAULT_SCAN_INTERVAL_MS, 5000);
+  assert.deepEqual(
+    plain(api.SCAN_INTERVAL_CHOICES.map((choice) => choice.ms)),
+    [0, 5000, 30000, 60000, 300000],
+  );
+  assert.deepEqual(
+    plain(api.SCAN_INTERVAL_CHOICES.map((choice) => choice.labelKey)),
+    ['intervalOff', 'interval5s', 'interval30s', 'interval1m', 'interval5m'],
+  );
+
+  assert.equal(api.formatScanInterval(0, 'zh'), '关闭');
+  assert.equal(api.formatScanInterval(0, 'en'), 'Off');
+  assert.equal(api.formatScanInterval(5000, 'zh'), '每 5 秒');
+  assert.equal(api.formatScanInterval(5000, 'en'), 'Every 5s');
+  assert.equal(api.formatScanInterval(30000, 'zh'), '每 30 秒');
+  assert.equal(api.formatScanInterval(30000, 'en'), 'Every 30s');
+  assert.equal(api.formatScanInterval(60000, 'zh'), '每 1 分钟');
+  assert.equal(api.formatScanInterval(60000, 'en'), 'Every 1 min');
+  assert.equal(api.formatScanInterval(300000, 'zh'), '每 5 分钟');
+  assert.equal(api.formatScanInterval(300000, 'en'), 'Every 5 min');
+
+  // Values the Host config allows outside the presets still render readably.
+  assert.equal(api.formatScanInterval(10000, 'zh'), '每 10 秒');
+  assert.equal(api.formatScanInterval(10000, 'en'), 'every 10s');
+  assert.equal(api.formatScanInterval(120000, 'en'), 'every 2 min');
+  assert.equal(api.formatScanInterval(1500, 'zh'), '每 1500 毫秒');
+  // A Host predating `scanIntervalMs` falls back to the contract default.
+  assert.equal(api.formatScanInterval(undefined, 'zh'), '每 5 秒');
+  assert.equal(api.formatScanInterval(-1, 'en'), 'Every 5s');
+});
+
+test('panel defaults keep settings and the composer collapsed', async () => {
+  const api = await loadClientApi();
+  assert.deepEqual(plain(api.PANEL_DEFAULTS), {
+    settingsOpen: false,
+    composerOpen: false,
+    scanIntervalMs: 5000,
+  });
+  assert.equal(api.effectiveScanInterval({ scanIntervalMs: 30000 }), 30000);
+  assert.equal(api.effectiveScanInterval({ scanIntervalMs: 0 }), 0);
+  assert.equal(api.effectiveScanInterval({}), 5000);
+  assert.equal(api.effectiveScanInterval(null), 5000);
+  assert.equal(api.effectiveScanInterval({ scanIntervalMs: -1 }), 5000);
+  assert.equal(api.effectiveScanInterval({ scanIntervalMs: 'nope' }), 5000);
+  assert.equal(api.scanIntervalOptionKey(60000), 'interval1m');
+  assert.equal(api.scanIntervalOptionKey(0), 'intervalOff');
+  assert.equal(api.scanIntervalOptionKey(1234), '');
+});
+
 test('builds the Chinese aggregate note for a mixed requirement set', async () => {
   const api = await loadClientApi();
   const body = api.buildAggregateNote(createState(), 'zh');
@@ -321,6 +378,8 @@ test('builds action and reportNote payloads', async () => {
   assert.deepEqual(plain(api.buildAction('setAuto', { enabled: false })), { action: 'setAuto', enabled: false });
   assert.deepEqual(plain(api.buildAction('start', { id: 'req-1' })), { action: 'start', id: 'req-1' });
   assert.deepEqual(plain(api.buildAction('createFromText', { text: 'hi' })), { action: 'createFromText', text: 'hi' });
+  assert.deepEqual(plain(api.buildAction('setScanInterval', { ms: 30000 })), { action: 'setScanInterval', ms: 30000 });
+  assert.deepEqual(plain(api.buildAction('setScanInterval', { ms: 0 })), { action: 'setScanInterval', ms: 0 });
 
   const body = api.buildNoteReportBody({
     at: 1234,

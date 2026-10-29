@@ -9,15 +9,33 @@ import { apply, ROUTE_PREFIX } from '../index.js'
 
 const PNG_MESSAGE = { id: 'm-zoom', at: Date.parse('2026-10-28T15:13:00Z'), mine: false, text: '点击图片无法放大捏' }
 
-function writeChatState(home, messages) {
+function writeChatState(home, messages, contacts = [{ id: 'c1', name: '问号' }]) {
+  const threads = {}
+  for (const contact of contacts) threads[contact.id] = contact.id === 'c1' ? messages : []
+  const file = path.join(home, 'plugin-data', 'chat-room', 'state.json')
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  if (messages && messages.selfThread !== undefined) {
+    // Full-state form: { contacts, threads } already assembled by the caller.
+    fs.writeFileSync(file, JSON.stringify({ version: 3, contacts, threads: messages.threads }), 'utf8')
+    return file
+  }
+  fs.writeFileSync(file, JSON.stringify({ version: 3, contacts, threads }), 'utf8')
+  return file
+}
+
+/** Write the user's own 「我聊」 (self chat) thread. */
+function writeSelfChatState(home, messages) {
   const file = path.join(home, 'plugin-data', 'chat-room', 'state.json')
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
     JSON.stringify({
       version: 3,
-      contacts: [{ id: 'c1', name: '问号' }],
-      threads: { c1: messages },
+      contacts: [
+        { id: 'self', name: '我聊', self: true },
+        { id: 'c1', name: '问号' },
+      ],
+      threads: { self: messages, c1: [] },
     }),
     'utf8',
   )
@@ -120,7 +138,7 @@ async function call(routes, method, suffix, body) {
 async function waitFor(predicate, timeoutMs = 5000) {
   const started = Date.now()
   while (Date.now() - started < timeoutMs) {
-    if (predicate()) return true
+    if (await predicate()) return true
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
   return false
@@ -258,6 +276,80 @@ test('Host half drives one full dry-run → start → report → auto-pump cycle
       }
     }, 3000)
     assert.equal(persistedOk, true, 'state file persisted the running iteration')
+  } finally {
+    for (const dispose of harness.disposers.reverse()) {
+      try {
+        dispose()
+      } catch (error) {
+        /* ignore */
+      }
+    }
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('the configurable periodic scan picks up a new self-chat note', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-self-iteration-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  writeSelfChatState(home, [])
+  const harness = makeHarness(home)
+  try {
+    apply(harness.ctx, {
+      enabled: true,
+      autoIterate: false,
+      scanIntervalMs: 0,
+      workspaceRoot: home,
+    })
+    // Wait for the one-shot startup scan to pass.
+    await new Promise((resolve) => setTimeout(resolve, 1800))
+    let state = (await call(harness.routes, 'GET', '/state')).json.state
+    assert.equal(state.scanIntervalMs, 0, 'snapshot exposes the scan interval')
+
+    // Periodic scan is off: a new self-chat note is not picked up.
+    writeSelfChatState(home, [
+      {
+        id: 'self-idea-1',
+        at: Date.now(),
+        mine: true,
+        text: '消息会话cell需要能置顶',
+      },
+    ])
+    await new Promise((resolve) => setTimeout(resolve, 2200))
+    state = (await call(harness.routes, 'GET', '/state')).json.state
+    assert.equal(state.requirements.length, 0, 'GET /state must not scan by itself')
+
+    // Turning the interval on starts the timed scan; the self note becomes a requirement.
+    const interval = await call(harness.routes, 'POST', '/action', {
+      action: 'setScanInterval',
+      ms: 1000,
+    })
+    assert.equal(interval.json.ok, true)
+    assert.equal(interval.json.scanIntervalMs, 1000)
+    const found = await waitFor(async () => {
+      const current = (await call(harness.routes, 'GET', '/state')).json.state
+      return current.requirements.some((item) => item.messageId === 'self-idea-1')
+    }, 6000)
+    assert.equal(found, true, 'periodic scan created the requirement')
+    state = (await call(harness.routes, 'GET', '/state')).json.state
+    const requirement = state.requirements.find((item) => item.messageId === 'self-idea-1')
+    assert.equal(requirement.title, '消息会话cell需要能置顶')
+    assert.equal(requirement.contact.self, true)
+    assert.equal(requirement.status, 'pending')
+
+    // Invalid values are rejected; 0 turns the timer off again.
+    const invalid = await call(harness.routes, 'POST', '/action', {
+      action: 'setScanInterval',
+      ms: 'soon',
+    })
+    assert.equal(invalid.json.ok, false)
+    const off = await call(harness.routes, 'POST', '/action', {
+      action: 'setScanInterval',
+      ms: 0,
+    })
+    assert.equal(off.json.scanIntervalMs, 0)
   } finally {
     for (const dispose of harness.disposers.reverse()) {
       try {
