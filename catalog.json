@@ -7,7 +7,7 @@
       "path": "plugins/workspace/notes-panel",
       "group": "workspace",
       "name": "@local/notes-panel",
-      "version": "1.15.1",
+      "version": "1.15.2",
       "description": "Harness Web UI 笔记面板：直接编辑渲染后的 Markdown，支持表格、图片、自动保存、插件版本日志和版本化分享快照。"
     },
     {
@@ -95,7 +95,7 @@
       "path": "plugins/agent/self-iteration",
       "group": "agent",
       "name": "@local/self-iteration",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "description": "自驱动迭代：读取「消息」里收到的 DSH 插件反馈，自动生成迭代需求，用创造模式的主 Agent 完成迭代，并把迭代记录以「自驱动」来源写进对应插件的笔记。"
     }
   ]

@@ -78,6 +78,14 @@ interface Requirement {
 
 interface IterationReport {
   pluginId: string        // 目标插件包名，例如 '@local/chat-room'
+  agent: {                 // 完成这次迭代的 Agent（模式 + 模型）
+    id: string             // Session id
+    preset: string         // 'cordis'（创造模式）等
+    presetLabel: { zh: string; en: string }
+    provider: string
+    model: string
+    label: { zh: string; en: string }   // 例如 创造模式 · deepseek-flash
+  }
   pluginName: { zh: string; en: string }
   version: string         // 迭代后的插件版本
   summary: { zh: string; en: string }
@@ -112,6 +120,7 @@ interface NoteSyncEvidence {
 | `createFromText` | `text: string`, `contactName?: string` | 手动创建一条需求（测试 / 面板补充） |
 | `openNote` | `id: string` | 返回 `{ ok: true, noteTitle }`，仅用于提示 |
 | `reportNote` | `report: NoteSyncEvidence` | Client 汇报笔记同步结果；Host 保存进 `stats.noteSync`，并对 `appliedIds` 里的需求置 `iteration.noteApplied = true` |
+| `resyncNotes` | — | 把所有已记录迭代的 `noteApplied` 置回 false，让 Client 幂等重写笔记（用于笔记格式/Agent 归属变更后回填） |
 | `setDryRun` | `enabled: boolean` | 切换试运行 |
 | `setScanInterval` | `ms: number` | 设置定时扫描间隔（毫秒，0=关闭，上限 600000）。Host 的扫描循环按它执行 |
 

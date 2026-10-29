@@ -247,9 +247,28 @@ window.__ModuleLoader__.load({
      * (and VERSION) when this plugin ships.
      * ------------------------------------------------------------------ */
 
-    const VERSION = '1.0.3';
+    const VERSION = '1.0.4';
 
     const CHANGELOG = [
+      {
+        version: '1.0.4',
+        at: '2026-10-29T23:55+08:00',
+        source: 'harness',
+        points: {
+          zh: [
+            '新增：自驱动版本记录会带上完成它的 Agent 归属，标题形如「自驱动（创造模式 · deepseek-flash）」',
+            '新增：汇总笔记的「已完成」条目同样显示执行 Agent，便于区分是哪一个 Agent 完成的',
+            '改进：历史迭代的 Agent 归属由 Host 从会话日志自动回填，旧记录也会补上归属',
+            '说明：没有归属信息的记录仍然只显示「自驱动」，不影响旧笔记',
+          ],
+          en: [
+            'New: a self-driven release entry now names the Agent that completed it, e.g. "自驱动（创造模式 · deepseek-flash）"',
+            'New: the aggregate note also shows the executing Agent on done items, so iterations from different Agents are distinguishable',
+            'Improved: existing iterations get their Agent attribution backfilled from their Session logs by the Host',
+            'Note: entries without attribution still render as plain 自驱动, so old notes stay valid',
+          ],
+        },
+      },
       {
         version: '1.0.3',
         at: '2026-10-29T23:29+08:00',
@@ -456,6 +475,19 @@ window.__ModuleLoader__.load({
       return '';
     }
 
+    /** The Agent that completed the iteration, e.g. 创造模式 · deepseek-flash. */
+    function iterationAgentLabel(iteration, lang) {
+      if (!iteration || typeof iteration !== 'object') return '';
+      const agent = iteration.agent && typeof iteration.agent === 'object' ? iteration.agent : null;
+      if (!agent) return '';
+      const label = agent.label && typeof agent.label === 'object'
+        ? agent.label
+        : agent.presetLabel && typeof agent.presetLabel === 'object'
+          ? agent.presetLabel
+          : '';
+      return cleanText(localized(label, lang));
+    }
+
     function pluginNameOf(iteration, lang) {
       if (!iteration) return '';
       const named = localized(iteration.pluginName, lang);
@@ -634,7 +666,12 @@ window.__ModuleLoader__.load({
           if (head !== '') parts.push(head);
           const recorded = formatNoteTime(iteration.recordedAt || requirement.finishedAt || requirement.detectedAt);
           if (recorded !== '') parts.push(recorded);
-          parts.push(dict.attribution);
+          const agentLabel = iterationAgentLabel(iteration, lang);
+          parts.push(
+            agentLabel !== ''
+              ? dict.attribution + dict.noteOpenParen + agentLabel + dict.noteCloseParen
+              : dict.attribution,
+          );
           lines.push('  - ' + parts.join(' · '));
           const summary = cleanText(localized(iteration.summary, lang));
           if (summary !== '') lines.push('  - ' + summary);
@@ -716,6 +753,7 @@ window.__ModuleLoader__.load({
           iteration.recordedAt || (requirement && requirement.finishedAt) || Date.now(),
         ),
         points: { zh: zh.slice(0, 4), en: en.slice(0, 4) },
+        agentName: iterationAgentLabel(iteration, locale),
         requirementId: requirement && typeof requirement.id === 'string' ? requirement.id : '',
       };
     }

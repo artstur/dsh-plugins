@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     const MAX_SHARE_CODE_LENGTH = 5600000;
     const SHARE_CODE_PREFIX = 'DSHNOTE1:';
 
-    const VERSION = '1.15.1';
+    const VERSION = '1.15.2';
     const NOTES_PLUGIN_ID = '@local/notes-panel';
     const PLUGIN_LOG_STORAGE_KEY = 'dsh.notes.plugin-logs.v1';
     const PLUGIN_LOG_SYSTEM_PREFIX = 'plugin-version-log:';
@@ -54,6 +54,25 @@ window.__ModuleLoader__.load({
     // release, prepend its entry here and bump package.json; the entry is
     // appended to the note the next time the Client module loads.
     const CHANGELOG = [
+      {
+        version: '1.15.2',
+        at: '2026-10-29T23:52+08:00',
+        source: 'harness',
+        points: {
+          zh: [
+            '新增：自驱动版本条目可以带上执行 Agent 归属（sourceName），标题渲染为「自驱动（创造模式 · deepseek-flash）」；没有归属时仍显示「自驱动」',
+            '改进：自驱动条目按目标笔记标题解析到同一篇笔记，兼容 @local 开发链接与已发布包的插件身份，不再依赖重复笔记合并',
+            '改进：自驱动条目同时记录到规范插件身份下，目标插件注册自己的 descriptor 后，Agent 归属不会被覆盖回「自驱动」',
+            '测试：补充 Agent 归属标题渲染与两种插件身份合并的用例',
+          ],
+          en: [
+            'New: self-driven release entries can carry the executing Agent attribution (sourceName); the heading renders as "Self-driven (Creation mode · deepseek-flash)", and stays "Self-driven" when absent',
+            'Improved: a self-driven entry resolves to the same note by its generated title, covering both the @local dev link and the published package identity without relying on duplicate-note merging',
+            'Improved: self-driven entries are also stored under the canonical plugin identity, so a target plugin registering its own descriptor cannot overwrite the Agent attribution back to "Self-driven"',
+            'Tests: added coverage for Agent-attribution headings and the two plugin identities',
+          ],
+        },
+      },
       {
         version: '1.15.1',
         at: '2026-10-29T21:35+08:00',
@@ -2475,7 +2494,12 @@ window.__ModuleLoader__.load({
         lowered === 'self_driven' ||
         label === '自驱动'
       ) {
-        return { source: 'self-driven', sourceName: undefined };
+        // A self-driven release may name the executing Agent (preset + model);
+        // without a name it keeps the bare 自驱动 label.
+        return {
+          source: 'self-driven',
+          sourceName: explicitName ? displayAgentName(explicitName) : undefined,
+        };
       }
       if (lowered === 'external' || lowered === 'external agent' || lowered === 'agent') {
         return {
@@ -2507,6 +2531,10 @@ window.__ModuleLoader__.load({
       const source =
         entry && typeof entry.source === 'string' && entry.source ? entry.source : 'unattributed';
       if (source === 'self-driven') {
+        const name = displayAgentName(entry && entry.sourceName);
+        if (name) {
+          return lang === 'zh' ? '自驱动（' + name + '）' : 'Self-driven (' + name + ')';
+        }
         return lang === 'zh' ? '自驱动' : 'Self-driven';
       }
       if (source === 'external') {
@@ -2878,6 +2906,13 @@ window.__ModuleLoader__.load({
       const points = normalizeChangelogPoints(raw.points);
       if (!points.zh.length && !points.en.length) return null;
       const entry = { version, at, source: SELF_DRIVEN_SOURCE, points };
+      const agentName =
+        typeof raw.agentName === 'string'
+          ? raw.agentName.trim()
+          : typeof raw.sourceName === 'string'
+            ? raw.sourceName.trim()
+            : '';
+      if (agentName) entry.sourceName = displayAgentName(agentName);
       const requirementId = typeof raw.requirementId === 'string' ? raw.requirementId.trim() : '';
       if (requirementId) entry.requirementId = requirementId;
       return entry;
@@ -3000,7 +3035,6 @@ window.__ModuleLoader__.load({
       if (noteTitle) record.noteTitle = noteTitle;
       record.entries = dedupeSelfDrivenEntries(record.entries.concat([entry]));
       extras[pluginId] = record;
-      if (!saveSelfDrivenLogs(extras)) return { ok: false, error: 'save-failed' };
       const registered = loadPluginLogs()[pluginId];
       const descriptor = registered
         ? Object.assign({}, registered, {
@@ -3013,9 +3047,63 @@ window.__ModuleLoader__.load({
             noteTitle: record.noteTitle,
             version: record.entries[0].version,
           };
+      // The same plugin can appear under a dev-link identity (@local/...) and a
+      // published-package identity (dsh-...). Resolve the surviving note by its
+      // generated title, merge any stale dev-link note into it, and keep the
+      // 自驱动 extras under THAT identity, so a later descriptor registration
+      // cannot drop the Agent attribution.
+      let targetId = pluginId;
+      try {
+        const foldTitle = (value) => String(value || '').replace(/\s+/g, '');
+        const desiredTitle = pluginNoteTitle(descriptor, currentLang);
+        const candidates = versionLogNotes().filter(
+          (note) => foldTitle(note.title) === foldTitle(desiredTitle),
+        );
+        const ownNote = store
+          .getSnapshot()
+          .notes.find((note) => note && note.system === pluginLogSystem(pluginId));
+        if (candidates.length === 1 && (!ownNote || candidates[0].id !== ownNote.id)) {
+          const canonicalNote = candidates[0];
+          targetId = canonicalNote.system.slice(PLUGIN_LOG_SYSTEM_PREFIX.length);
+          // Fold a stale self-driven note (same releases, other identity) into
+          // the canonical note: keep its extra sections, then remove it.
+          if (ownNote) {
+            const target = splitLogSections(canonicalNote.body);
+            const byVersion = new Set(
+              target.sections.map((section) => logSectionVersion(section)).filter(Boolean),
+            );
+            const source = splitLogSections(ownNote.body);
+            const extraSections = source.sections.filter((section) => {
+              const version = logSectionVersion(section);
+              return !version || !byVersion.has(version);
+            });
+            let body = canonicalNote.body;
+            if (extraSections.length) {
+              body = body.replace(/\s+$/, '') + '\n\n' + extraSections.join('\n\n') + '\n';
+            }
+            const patch = {};
+            if (body !== canonicalNote.body) patch.body = body;
+            if (Object.keys(patch).length) store.updateNote(canonicalNote.id, patch);
+            store.deleteNote(ownNote.id);
+            store.flush();
+          }
+        }
+      } catch (err) {
+        targetId = pluginId;
+      }
+      if (targetId !== pluginId) {
+        const canonical = extras[targetId] || { title: record.title, noteTitle: record.noteTitle, entries: [] };
+        canonical.title = canonical.title || record.title;
+        canonical.noteTitle = canonical.noteTitle || record.noteTitle;
+        canonical.entries = dedupeSelfDrivenEntries(canonical.entries.concat(record.entries));
+        extras[targetId] = canonical;
+      }
+      if (!saveSelfDrivenLogs(extras)) return { ok: false, error: 'save-failed' };
+      const targetDescriptor =
+        targetId === pluginId ? descriptor : Object.assign({}, descriptor, { id: targetId });
       let status;
       try {
-        status = syncPluginVersionLog(descriptor, currentLang, true);
+        status = syncPluginVersionLog(targetDescriptor, currentLang, true);
       } catch (err) {
         return { ok: false, error: 'sync-failed' };
       }
