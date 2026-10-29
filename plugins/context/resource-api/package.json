@@ -1,6 +1,6 @@
 {
   "name": "@local/resource-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "Unified device-side resource interface for Harness plugins: one resource.search / resource.read API over every plugin that registers a Provider, so notes, transcripts and messages become one addressable space.",
