@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.12.0.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.12.1.tgz';
 
     /**
      * The stylesheet is injected once for the whole plugin, not by the panel:
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.12.0';
+    const CLIENT_BUILD = '1.12.1';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
@@ -3414,8 +3414,23 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.12.0',
+            version: '1.12.1',
             entries: [
+              {
+                version: '1.12.1',
+                at: '2026-11-01T23:05+08:00',
+                source: 'harness',
+                points: {
+                  zh: [
+                    '修复：过期的发布清单会把「已知最新版本」往回降，可能把刚亮起的红点又抹掉；现在最新版本只会往前走',
+                    '顺带说明：1.10.0~1.12.0 之前只在本机构建、没有发布，所以那几轮没有更新提醒；1.12.0 已正式发布',
+                  ],
+                  en: [
+                    'Fixed: a cached manifest could lower the known newest version and hide a red dot that had just appeared; the newest version now only moves forward',
+                    'For the record: 1.10.0 to 1.12.0 were built and installed locally without a release, which is why those rounds had no update notice; 1.12.0 is published now',
+                  ],
+                },
+              },
               {
                 version: '1.12.0',
                 at: '2026-11-01T22:31+08:00',

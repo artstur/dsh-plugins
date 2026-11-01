@@ -1730,9 +1730,13 @@ class ContactsHost {
         this.broadcastState();
         return { ok: false, error: this.update.error, state: this.snapshot() };
       }
-      this.update.latest = latest;
+      // A cached manifest can lag behind a notice that was already received,
+      // so the newest version never goes backwards.
+      const known = this.update.latest || '';
+      const newest = compareVersions(latest, known) > 0 ? latest : known || latest;
+      this.update.latest = newest;
       this.update.updatable = true;
-      this.update.available = compareVersions(latest, PLUGIN_VERSION) > 0;
+      this.update.available = compareVersions(newest, PLUGIN_VERSION) > 0;
       this.update.error = '';
       this.update.checkedAt = Date.now();
     } catch (error) {
