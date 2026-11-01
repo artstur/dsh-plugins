@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.11.2.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.12.0.tgz';
 
     /**
      * The stylesheet is injected once for the whole plugin, not by the panel:
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.11.2';
+    const CLIENT_BUILD = '1.12.0';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
@@ -168,6 +168,9 @@ window.__ModuleLoader__.load({
         myName: '我的昵称',
         defaultRelay: '中继地址',
         relayHint: '双方要用同一个中继；改这里只影响以后发给别人的添加码。',
+        notifyTitle: '系统通知',
+        notifyLabel: '收到新消息时推送 macOS 系统通知',
+        notifyHint: '通知里显示联系人和消息内容（图片显示 📷）；关掉后新消息只在面板里显示未读。',
         limitsHint: '公共中继免费版约每天 250 条、消息保留 12 小时。',
         loadError: '聊天服务没有响应',
         threadLoadError: '这个联系人的历史记录没加载出来',
@@ -285,6 +288,9 @@ window.__ModuleLoader__.load({
         myName: 'My name',
         defaultRelay: 'Relay',
         relayHint: 'Both sides must use the same relay. Changing it only affects codes you send later.',
+        notifyTitle: 'System notifications',
+        notifyLabel: 'Push a macOS system notification when a message arrives',
+        notifyHint: 'The notification shows the contact and the message (a picture shows 📷). Turning it off keeps new messages in the panel only.',
         limitsHint: 'The public relay allows about 250 messages a day and keeps them for 12 hours.',
         loadError: 'The chat service did not respond',
         threadLoadError: 'History for this contact did not load',
@@ -1045,6 +1051,8 @@ window.__ModuleLoader__.load({
       '.dsh-msg-lightbox-close:hover{background:rgba(0,0,0,.6)}',
       '.dsh-msg-field{display:flex;flex-direction:column;gap:6px}',
       '.dsh-msg-label{font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary)}',
+      '.dsh-msg-check-row{display:flex;align-items:center;gap:8px;font-size:12.5px;line-height:1.5;color:var(--dsw-alias-label-primary);cursor:pointer}',
+      '.dsh-msg-check-row input{flex:0 0 auto;margin:0;accent-color:var(--dsw-alias-brand-primary)}',
       '.dsh-msg-input,.dsh-msg-textarea{box-sizing:border-box;width:100%;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none}',
       '.dsh-msg-input{height:34px;padding:0 10px}',
       '.dsh-msg-textarea{min-height:96px;padding:8px 10px;resize:vertical;line-height:1.55}',
@@ -1092,6 +1100,7 @@ window.__ModuleLoader__.load({
       const [removeArmed, setRemoveArmed] = React.useState(false);
       const [settingsNick, setSettingsNick] = React.useState('');
       const [settingsRelay, setSettingsRelay] = React.useState(DEFAULT_RELAY);
+      const [settingsNotify, setSettingsNotify] = React.useState(true);
       const [updateSpec, setUpdateSpec] = React.useState('');
       const [updateBusy, setUpdateBusy] = React.useState(false);
       const [updateNotice, setUpdateNotice] = React.useState('');
@@ -1655,7 +1664,11 @@ window.__ModuleLoader__.load({
           setFormError(t('badRelay'));
           return;
         }
-        const result = await post('/self', { nick: name, relay: settingsRelay });
+        const result = await post('/self', {
+          nick: name,
+          relay: settingsRelay,
+          notify: settingsNotify === true,
+        });
         if (result.ok) setOverlay(null);
         else setFormError(result.detail || t('loadError'));
       };
@@ -1987,6 +2000,22 @@ window.__ModuleLoader__.load({
                   onChange: (event) => setSettingsRelay(event.target.value),
                 }),
                 h('span', { className: 'dsh-msg-small' }, t('relayHint')),
+              ),
+              h(
+                'div',
+                { className: 'dsh-msg-section' },
+                h('span', { className: 'dsh-msg-label' }, t('notifyTitle')),
+                h(
+                  'label',
+                  { className: 'dsh-msg-check-row' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: settingsNotify,
+                    onChange: (event) => setSettingsNotify(event.target.checked),
+                  }),
+                  h('span', null, t('notifyLabel')),
+                ),
+                h('span', { className: 'dsh-msg-small' }, t('notifyHint')),
               ),
               h(
                 'div',
@@ -2452,6 +2481,7 @@ window.__ModuleLoader__.load({
                   onClick: () => {
                     setSettingsNick(state.self.nick || '');
                     setSettingsRelay(state.relay || DEFAULT_RELAY);
+                    setSettingsNotify(state.notify !== false);
                     setUpdateSpec((state.update && state.update.spec) || '');
                     setUpdateNotice('');
                     setFormError('');
@@ -3384,8 +3414,24 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.11.2',
+            version: '1.12.0',
             entries: [
+              {
+                version: '1.12.0',
+                at: '2026-11-01T22:31+08:00',
+                source: 'self-driven',
+                sourceName: 'DeepSeek Harness',
+                points: {
+                  zh: [
+                    '收到新消息时向 macOS 推送系统通知：标题是联系人，正文带消息预览（图片显示 📷）',
+                    '自己发的消息和「我聊」不会弹通知；「我的设置」新增「系统通知」开关，默认开启',
+                  ],
+                  en: [
+                    'Incoming messages now push a macOS system notification: the contact name is the title and the body carries a message preview (a picture shows 📷)',
+                    'Your own messages and "Chat with myself" stay quiet; a "System notifications" switch was added to My settings, on by default',
+                  ],
+                },
+              },
               {
                 version: '1.11.2',
                 at: '2026-10-29T23:29+08:00',

@@ -16,6 +16,7 @@
  * per relay in use), the per-contact history and a same-origin API, so the
  * browser never sees relay credentials.
  */
+import { spawn } from 'node:child_process';
 import {
   createHash,
   createPublicKey,
@@ -90,6 +91,9 @@ const RECONNECT_MAX = 20000;
 /** How often an idle page stream gets a comment line, in milliseconds. */
 const PAGE_KEEPALIVE = 25000;
 
+/** Longest message preview carried by a system notification, in characters. */
+const NOTIFY_PREVIEW = 180;
+
 /** Upper bound on a request body from the page. */
 const MAX_BODY = 65536;
 
@@ -145,6 +149,79 @@ function describeError(error) {
   const message = typeof error.message === 'string' ? error.message : String(error);
   const cause = error.cause && typeof error.cause.message === 'string' ? error.cause.message : '';
   return cause && cause !== message ? message + ' (' + cause + ')' : message;
+}
+
+/* ---------------------------------------------------------------------- *
+ * macOS notifications
+ *
+ * The Host is the half that sees every incoming message, including while the
+ * panel is closed, so it pushes the notification. `osascript` is the one
+ * script runner every macOS install has; these helpers only build and hand it
+ * one short script, and nothing here may affect message delivery.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Makes one value safe inside an AppleScript string literal. Control
+ * characters are flattened and quotes/backslashes escaped, so a message can
+ * never break out of the literal or leave a script that will not compile.
+ */
+export function appleScriptText(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .trim();
+}
+
+/** The one-line body of the notification for a received message. */
+export function notificationPreview(message) {
+  if (!message || typeof message !== 'object') return '';
+  const text = typeof message.text === 'string' ? message.text.replace(/\s+/g, ' ').trim() : '';
+  if (text) return text.length > NOTIFY_PREVIEW ? text.slice(0, NOTIFY_PREVIEW - 1) + '…' : text;
+  return message.image ? '📷' : '';
+}
+
+/** Builds the AppleScript that shows one system notification. */
+export function buildNotificationScript({ title, subtitle, body } = {}) {
+  const text = appleScriptText(body);
+  if (!text) return '';
+  const parts = ['display notification "' + text + '"'];
+  const safeTitle = appleScriptText(title);
+  if (safeTitle) parts.push('with title "' + safeTitle + '"');
+  const safeSubtitle = appleScriptText(subtitle);
+  if (safeSubtitle) parts.push('subtitle "' + safeSubtitle + '"');
+  return parts.join(' ');
+}
+
+/**
+ * Whether one received message should become a banner: only on macOS, only
+ * when notifications are on, never for the self chat or for a message this
+ * installation wrote itself, and only when there is something to preview.
+ */
+export function shouldNotifyMessage({
+  platform = process.platform,
+  notify = true,
+  contact = null,
+  message = null,
+} = {}) {
+  if (platform !== 'darwin') return false;
+  if (notify === false) return false;
+  if (!contact || contact.self === true) return false;
+  if (!message || message.mine) return false;
+  return Boolean(notificationPreview(message));
+}
+
+/** Shows one notification through osascript. Best-effort: a missing runner or
+ *  a notification permission that was never granted just loses the banner. */
+function showMacNotification(script) {
+  if (!script || process.platform !== 'darwin') return;
+  try {
+    const child = spawn('osascript', ['-e', script], { stdio: 'ignore' });
+    child.on('error', () => {});
+    if (typeof child.unref === 'function') child.unref();
+  } catch (error) {
+    /* notifications are best-effort */
+  }
 }
 
 function readBody(req) {
@@ -532,6 +609,9 @@ class ContactsHost {
       threads: {},
       inboxCursors: {},
       updateSpec: '',
+      // A message that arrives while the panel is closed is easy to miss, so
+      // the macOS notification is on unless the user turns it off.
+      notify: true,
     };
   }
 
@@ -694,6 +774,7 @@ class ContactsHost {
       contacts,
       threads,
       inboxCursors,
+      notify: parsed.notify !== false,
     };
   }
 
@@ -958,6 +1039,8 @@ class ContactsHost {
         inbox: this.loaded.inbox,
       },
       relay: this.loaded.relay,
+      // Whether new messages should also pop a macOS notification.
+      notify: this.loaded.notify !== false,
       addCode: this.addCode(),
       status: aggregate.status,
       error: aggregate.error,
@@ -1070,7 +1153,7 @@ class ContactsHost {
           url: attachment && typeof attachment.url === 'string' ? attachment.url : '',
         })
       : null;
-    this.appendMessage(contact, {
+    const incoming = {
       id: envelope.id,
       at: envelope.at,
       from: envelope.from,
@@ -1082,7 +1165,9 @@ class ContactsHost {
       quote: envelope.quote || null,
       image: picture,
       file: '',
-    });
+    };
+    this.appendMessage(contact, incoming);
+    this.notifyIncoming(contact, incoming);
     // A picture is fetched right away, so the history keeps showing it after
     // the relay drops the attachment.
     if (envelope.image && attachment) {
@@ -1110,6 +1195,34 @@ class ContactsHost {
     this.persist();
     this.broadcast('message', { contactId: contact.id, message });
     this.broadcastContact(contact);
+  }
+
+  /**
+   * Pushes one incoming message to a macOS notification. Only the Host sees a
+   * message while the panel is closed, which is exactly when a banner is
+   * wanted; self notes and messages written from this same installation are
+   * not news to the person at the keyboard, so they stay quiet.
+   */
+  notifyIncoming(contact, message) {
+    if (
+      !shouldNotifyMessage({
+        platform: process.platform,
+        notify: this.loaded.notify !== false,
+        contact,
+        message,
+      })
+    ) {
+      return;
+    }
+    const preview = notificationPreview(message);
+    const name = normalizeName(contact.name || '');
+    showMacNotification(
+      buildNotificationScript({
+        title: name || '消息',
+        subtitle: name ? '消息' : '',
+        body: preview,
+      }),
+    );
   }
 
   /** Opens the conversation with myself, creating it the first time. */
@@ -1227,7 +1340,7 @@ class ContactsHost {
     };
   }
 
-  setSelf({ nick, relay }) {
+  setSelf({ nick, relay, notify }) {
     const nextNick = normalizeName(nick);
     if (nick !== undefined && !nextNick) return { ok: false, error: 'invalid-nick' };
     if (nextNick) this.loaded.nick = nextNick;
@@ -1238,6 +1351,7 @@ class ContactsHost {
       this.loaded.inboxCursors = {};
       this.syncBridges();
     }
+    if (typeof notify === 'boolean') this.loaded.notify = notify;
     this.persist();
     this.broadcastState();
     return { ok: true, state: this.snapshot() };
@@ -2148,7 +2262,7 @@ class ContactsHost {
           json(400, { ok: false, error: 'bad-json' });
           return;
         }
-        json(200, this.setSelf({ nick: body.nick, relay: body.relay }));
+        json(200, this.setSelf({ nick: body.nick, relay: body.relay, notify: body.notify }));
         return;
       }
       if (req.method === 'POST' && suffix === '/update/source') {
