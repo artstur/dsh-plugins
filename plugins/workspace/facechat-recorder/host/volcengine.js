@@ -372,7 +372,7 @@ export function createVolcengineClient(options = {}) {
       }
 
       timer = setTimeout(() => {
-        if (latestText) finishWithText()
+        if (sawFinal) finishWithText()
         else finish(null, Object.assign(new Error('火山引擎识别超时'), { code: 'volc-timeout' }))
       }, timeoutMs)
       if (timer && typeof timer.unref === 'function') timer.unref()

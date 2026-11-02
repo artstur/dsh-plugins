@@ -5265,7 +5265,7 @@ window.__ModuleLoader__.load({
                   value: cloudConfig.volc.language || 'zh-CN',
                   'aria-label': t('language'),
                   title: t('language'),
-                  disabled: recording || starting || stopping,
+                  disabled: recording || starting || stopping || !cloudSnap.available,
                   onChange: (event) => changeLanguage(event.target.value),
                 },
                 CLOUD_LANGUAGES.map((item) =>
