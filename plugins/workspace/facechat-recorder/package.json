@@ -1,9 +1,9 @@
 {
   "name": "@local/facechat-recorder",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
-  "description": "Face-to-face conversation recorder panel: near-real-time transcription, automatic speaker separation with merge correction, a transcript glossary for technical terms, identity-aware summaries, model preparation and Markdown export.",
+  "description": "Face-to-face conversation recorder panel: near-real-time transcription with a local SenseVoice engine or Volcengine SeedASR, Codex CLI transcript polishing, automatic speaker separation, glossary correction, identity-aware summaries and Markdown export.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -12,6 +12,9 @@
   },
   "files": [
     "index.js",
+    "host/settings.js",
+    "host/volcengine.js",
+    "host/codex.js",
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",

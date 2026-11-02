@@ -256,6 +256,12 @@ function mapConnectionError(error) {
   if (/\b403\b|forbidden/i.test(raw)) {
     return Object.assign(new Error('火山引擎拒绝访问：请检查 API Key 权限'), { code: 'volc-forbidden' })
   }
+  if (/non-101|network error|handshake|unexpected server response/i.test(raw)) {
+    return Object.assign(
+      new Error('火山引擎握手被拒绝：请确认 API Key 有效、资源 ID 为 volc.seedasr.sauc.duration，且该 Key 已开通 SeedASR'),
+      { code: 'volc-handshake-failed' },
+    )
+  }
   return Object.assign(new Error('火山引擎连接失败：' + raw), { code: 'volc-connection-failed' })
 }
 

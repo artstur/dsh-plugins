@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Face-to-face Recorder",
-    "description": "Record a face-to-face conversation and get a near-real-time transcript that separates speakers by voice, with a technical-term glossary, speaker merge, history and Markdown export."
+    "description": "Record a face-to-face conversation with local SenseVoice or Volcengine SeedASR recognition and Codex transcript polish, plus speaker separation, glossary correction and Markdown export."
   }
 }

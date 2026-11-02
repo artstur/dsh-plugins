@@ -147,6 +147,7 @@ window.__ModuleLoader__.load({
         polish: 'Codex 润色',
         polishing: '润色中…',
         polishDone: '已润色 {n} 行',
+        polishFailed: '润色失败：{message}',
         polishNoLines: '还没有可润色的文字',
         codexUnavailable: 'Codex 润色服务未加载，请重启 DSH 后重试。',
         cloudTranscribeFailed: '云端识别失败：{message}',
@@ -316,6 +317,7 @@ window.__ModuleLoader__.load({
         polish: 'Codex polish',
         polishing: 'Polishing…',
         polishDone: 'Polished {n} lines',
+        polishFailed: 'Polish failed: {message}',
         polishNoLines: 'No transcript text to polish yet',
         codexUnavailable: 'The Codex polish service is not loaded. Restart DSH and retry.',
         cloudTranscribeFailed: 'Cloud recognition failed: {message}',
@@ -2642,6 +2644,7 @@ window.__ModuleLoader__.load({
           if (!chunk || !vad || !queue) return;
           if (event.elapsedMs < INTERIM_MIN_MS) return;
           if (event.elapsedMs - lastInterimAt < INTERIM_INTERVAL_MS) return;
+          if (!queue.canInterim()) return;
           const samples = vad.currentSamples();
           if (!samples || samples.length < FRAME_SAMPLES * 4) return;
           const gen = chunk.gen;
@@ -5003,6 +5006,7 @@ window.__ModuleLoader__.load({
           titleTimer.current = null;
         }
         setActionError('');
+        setPolishNotice('');
         setPendingDelete(null);
         void engine.start();
       };
@@ -5171,6 +5175,15 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const idleStatusText = backend === 'volc'
+        ? !cloudSnap.available
+          ? t('cloudUnavailable')
+          : cloudReady
+            ? t('cloudReady')
+            : t('cloudUnconfigured')
+        : canStart
+          ? t('ready')
+          : t('statusUnprepared');
       const statusPillTone = recording
         ? 'live'
         : starting || stopping
@@ -5188,13 +5201,15 @@ window.__ModuleLoader__.load({
             ? t('stopping')
             : isReview
               ? t('saved')
-              : canStart
-                ? t('ready')
-                : t('statusUnprepared');
+              : idleStatusText;
 
       const engineErrorKey = snap.error && snap.error.key;
       const showEngineError =
-        engineErrorKey && engineErrorKey !== 'errorSpeechUnavailable' && engineErrorKey !== 'errorNotReady';
+        engineErrorKey &&
+        engineErrorKey !== 'errorSpeechUnavailable' &&
+        engineErrorKey !== 'errorNotReady' &&
+        engineErrorKey !== 'errorCloudUnavailable' &&
+        engineErrorKey !== 'errorCloudNotConfigured';
 
       const header = h(
         'header',
@@ -5223,6 +5238,18 @@ window.__ModuleLoader__.load({
             {
               type: 'button',
               className: 'dsh-facechat-btn dsh-facechat-btn--ghost',
+              title: t('settings'),
+              'aria-label': t('settings'),
+              onClick: () => setSettingsOpen(true),
+            },
+            settingsGlyph(15),
+            h('span', null, t('settings')),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'dsh-facechat-btn dsh-facechat-btn--ghost',
               title: t('glossary'),
               'aria-label': t('glossary'),
               onClick: openGlossary,
@@ -5230,22 +5257,37 @@ window.__ModuleLoader__.load({
             glossaryGlyph(15),
             h('span', null, t('glossary')),
           ),
-          status.catalog && provider
+          backend === 'volc'
             ? h(
                 'select',
                 {
                   className: 'dsh-facechat-select',
-                  value: status.catalog.selection.language,
+                  value: cloudConfig.volc.language || 'zh-CN',
                   'aria-label': t('language'),
                   title: t('language'),
-                  disabled: recording || starting || stopping || !speechSnap.connected,
+                  disabled: recording || starting || stopping,
                   onChange: (event) => changeLanguage(event.target.value),
                 },
-                (provider.languages || ['auto']).map((language) =>
-                  h('option', { key: language, value: language }, languageLabel(language, t)),
+                CLOUD_LANGUAGES.map((item) =>
+                  h('option', { key: item.id, value: item.id }, isChineseLocale(activeLocale) ? item.zh : item.en),
                 ),
               )
-            : null,
+            : status.catalog && provider
+              ? h(
+                  'select',
+                  {
+                    className: 'dsh-facechat-select',
+                    value: status.catalog.selection.language,
+                    'aria-label': t('language'),
+                    title: t('language'),
+                    disabled: recording || starting || stopping || !speechSnap.connected,
+                    onChange: (event) => changeLanguage(event.target.value),
+                  },
+                  (provider.languages || ['auto']).map((language) =>
+                    h('option', { key: language, value: language }, languageLabel(language, t)),
+                  ),
+                )
+              : null,
           recording
             ? h(
                 'button',
@@ -5463,16 +5505,71 @@ window.__ModuleLoader__.load({
       const banners = h(
         'div',
         { className: 'dsh-facechat-banners' },
-        h(SetupBanner, {
-          speechSnap,
-          t,
-          source,
-          onSource: setSource,
-          onPrepare: prepare,
-          onCancel: cancelPreparation,
-          busy,
-          actionError: '',
-        }),
+        backend === 'volc'
+          ? !cloudSnap.available
+            ? h(
+                'div',
+                { className: 'dsh-facechat-banner', 'data-tone': 'error' },
+                h('span', { className: 'dsh-facechat-banner-icon' }, alertGlyph(16)),
+                h(
+                  'div',
+                  { className: 'dsh-facechat-banner-body' },
+                  h('span', { className: 'dsh-facechat-banner-title' }, t('cloudUnavailable')),
+                  h('span', { className: 'dsh-facechat-banner-text' }, t('cloudRestartHint')),
+                  h(
+                    'div',
+                    { className: 'dsh-facechat-banner-actions' },
+                    h(
+                      'button',
+                      { type: 'button', className: 'dsh-facechat-btn', onClick: refreshCloud },
+                      t('retryPrepare'),
+                    ),
+                    h(
+                      'button',
+                      { type: 'button', className: 'dsh-facechat-btn dsh-facechat-btn--primary', onClick: () => setSettingsOpen(true) },
+                      t('openSettings'),
+                    ),
+                  ),
+                ),
+              )
+            : h(
+                'div',
+                { className: 'dsh-facechat-banner', 'data-tone': cloudConfig.volc.configured ? 'info' : 'warn' },
+                h('span', { className: 'dsh-facechat-banner-icon' }, cloudConfig.volc.configured ? waveBarsGlyph(16) : alertGlyph(16)),
+                h(
+                  'div',
+                  { className: 'dsh-facechat-banner-body' },
+                  h(
+                    'span',
+                    { className: 'dsh-facechat-banner-title' },
+                    cloudConfig.volc.configured ? t('cloudReady') : t('cloudUnconfigured'),
+                  ),
+                  h(
+                    'span',
+                    { className: 'dsh-facechat-banner-text' },
+                    cloudConfig.volc.configured ? t('cloudBannerReady') : t('cloudPrivacy'),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-facechat-banner-actions' },
+                    h(
+                      'button',
+                      { type: 'button', className: 'dsh-facechat-btn', onClick: () => setSettingsOpen(true) },
+                      t('openSettings'),
+                    ),
+                  ),
+                ),
+              )
+          : h(SetupBanner, {
+              speechSnap,
+              t,
+              source,
+              onSource: setSource,
+              onPrepare: prepare,
+              onCancel: cancelPreparation,
+              busy,
+              actionError: '',
+            }),
         showLanguageTip
           ? h(
               'div',
@@ -5551,6 +5648,18 @@ window.__ModuleLoader__.load({
               ),
             )
           : null,
+        polishNotice
+          ? h(
+              'div',
+              { className: 'dsh-facechat-banner', 'data-tone': 'info' },
+              h('span', { className: 'dsh-facechat-banner-icon' }, sparkleGlyph(16)),
+              h(
+                'div',
+                { className: 'dsh-facechat-banner-body' },
+                h('span', { className: 'dsh-facechat-banner-text' }, polishNotice),
+              ),
+            )
+          : null,
       );
 
       const footerStatus = recording
@@ -5559,9 +5668,15 @@ window.__ModuleLoader__.load({
           ? t(stopping ? 'stopping' : 'starting')
           : isReview
             ? t('saved') + ' · ' + t('lineCount', { n: String(lines.length) })
-            : canStart
-              ? t('modelReady')
-              : t('statusUnprepared');
+            : backend === 'volc'
+              ? !cloudSnap.available
+                ? t('cloudUnavailable')
+                : cloudReady
+                  ? t('cloudReady')
+                  : t('cloudUnconfigured')
+              : canStart
+                ? t('modelReady')
+                : t('statusUnprepared');
 
       const footer = h(
         'footer',
@@ -5572,6 +5687,20 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsh-facechat-footer-actions' },
+          polishBusy || canPolish
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-facechat-btn',
+                  disabled: polishBusy || !canPolish,
+                  title: cloudSnap.available ? t('polish') : t('codexUnavailable'),
+                  onClick: polishTranscript,
+                },
+                sparkleGlyph(14),
+                polishBusy ? t('polishing') : t('polish'),
+              )
+            : null,
           canExport
             ? h(
                 'button',
@@ -5614,6 +5743,20 @@ window.__ModuleLoader__.load({
               glossary,
               onClose: () => setGlossaryOpen(false),
               onSaved: applyGlossary,
+            })
+          : null,
+        settingsOpen
+          ? h(CloudSettingsDialog, {
+              t,
+              activeLocale,
+              cloud,
+              cloudSnap,
+              onClose: () => setSettingsOpen(false),
+              onSaved: () => {
+                setPolishNotice(t('settingsSaved'));
+                setActionError('');
+              },
+              onRefresh: refreshCloud,
             })
           : null,
       );
@@ -5665,8 +5808,27 @@ window.__ModuleLoader__.load({
             id: '@local/facechat-recorder',
             title: { zh: '面聊录音', en: 'Face-to-face Recorder' },
             noteTitle: { zh: '面聊录音版本记录', en: 'Face-to-face Recorder version log' },
-            version: '1.3.0',
+            version: '1.4.0',
             entries: [
+              {
+                version: '1.4.0',
+                at: '2026-11-03T00:20+08:00',
+                source: 'harness',
+                points: {
+                  zh: [
+                    '新增火山引擎 SeedASR 云端识别：在「识别设置」里切换识别引擎并填写 API Key，默认资源 ID 与 Type4Me 一致（volc.seedasr.sauc.duration），支持中/英/日/韩/粤语与自动语言',
+                    '新增 Codex CLI 润色：把逐字稿按行发送给本机已登录的 Codex，修正术语后按原话者与时间回填，可分批处理',
+                    '新增 Host 端 /plugin/facechat 服务与识别设置面板；API Key 只保存在本机 0600 文件，不下发浏览器',
+                    '隐私：火山引擎模式音频会上传云端，Codex 润色文字会发送 OpenAI；两者都需要用户显式选择后才启用',
+                  ],
+                  en: [
+                    'Added Volcengine SeedASR cloud recognition: switch engines in Recognition settings and enter an API key; the default resource ID matches Type4Me (volc.seedasr.sauc.duration) and Chinese/English/Japanese/Korean/Cantonese/auto languages are supported',
+                    'Added Codex CLI polish: transcript lines go to the locally signed-in Codex for terminology repair, then return to the same speakers and timestamps in batches',
+                    'Added the Host /plugin/facechat service and a recognition settings panel; the API key stays in a local 0600 file and is never sent to the browser',
+                    'Privacy: Volcengine mode uploads audio to the cloud and Codex polish sends transcript text to OpenAI; both require an explicit user choice',
+                  ],
+                },
+              },
               {
                 version: '1.3.0',
                 at: '2026-10-27T16:46+08:00',
@@ -5803,9 +5965,12 @@ window.__ModuleLoader__.load({
 
         const history = createHistoryStore();
         const glossary = createGlossaryStore();
+        const cloud = createCloudBridge();
+        void cloud.refresh();
+        ctx.effect(() => () => cloud.dispose(), 'facechat-cloud');
         const speechBridge = createSpeechBridge(ctx);
         speechBridge.connect(ctx);
-        const engine = createEngine({ speech: speechBridge, history, glossary });
+        const engine = createEngine({ speech: speechBridge, history, glossary, cloud });
         ctx.effect(() => () => engine.dispose(), 'facechat-engine');
 
         const View = (slotProps) =>
@@ -5818,6 +5983,7 @@ window.__ModuleLoader__.load({
               speech: speechBridge,
               history,
               glossary,
+              cloud,
             }),
           );
 
@@ -5864,7 +6030,9 @@ window.__ModuleLoader__.load({
         buildIdentitySummary,
         SummaryView,
         GlossaryDialog,
+        CloudSettingsDialog,
       };
+      plugin.__engine = { createEngine };
     }
 
     return plugin;

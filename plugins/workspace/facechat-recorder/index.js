@@ -83,11 +83,24 @@ async function readJsonBody(req) {
   return value
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+
 function originAllowed(req, webServer) {
   const origin = req.headers.origin
   if (!origin) return true
   try {
-    return origin === webServer.getOrigin()
+    const expected = webServer.getOrigin()
+    if (origin === expected) return true
+    const actualUrl = new URL(origin)
+    const expectedUrl = new URL(expected)
+    // The advertised URL is normally 127.0.0.1, but a page opened through
+    // localhost is still the same local Harness UI.
+    return (
+      actualUrl.protocol === expectedUrl.protocol &&
+      actualUrl.port === expectedUrl.port &&
+      LOOPBACK_HOSTS.has(actualUrl.hostname) &&
+      LOOPBACK_HOSTS.has(expectedUrl.hostname)
+    )
   } catch (error) {
     return false
   }

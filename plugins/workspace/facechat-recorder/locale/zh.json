@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "面聊录音",
-    "description": "面对面聊天录音并近乎实时地转成文字，按声音自动区分话者，支持术语纠错、话者合并、历史记录与 Markdown 导出。"
+    "description": "面对面聊天录音并近乎实时地转成文字，可选择本机 SenseVoice 或火山引擎 SeedASR 识别，并用 Codex 润色；支持话者分离、术语纠错与 Markdown 导出。"
   }
 }

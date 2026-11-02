@@ -16,6 +16,14 @@ full-width recorder page in the main column.
   and the final sentence is transcribed as soon as the speaker pauses. Long
   monologues are force-split at 12 s so every recognition request stays inside
   the speech service limits.
+- **Two recognition backends**: local SenseVoice (offline, no key) or
+  **Volcengine SeedASR** via the Host half, using the same
+  `volc.seedasr.sauc.duration` resource and API-key authentication as Type4Me.
+  Switch engines in **Recognition settings**; the API key stays on the Host.
+- **Codex CLI polish**: send the finished transcript (in batches) to the locally
+  signed-in Codex CLI with a JSON Schema, then write corrected text back to the
+  same speaker lines and timestamps. This targets the technical-term mistakes
+  the local model still makes, without changing who said what.
 - **Automatic speaker separation (话者分离)**: each utterance gets an acoustic
   embedding (mean MFCCs plus a weighted pitch and spectral-centroid term) and is
   clustered online into up to six speakers. The transcript shows a colored
@@ -53,23 +61,42 @@ full-width recorder page in the main column.
 - English and Chinese UI following the Harness locale; light and dark themes via
   `--dsw-alias-*` tokens only.
 
-## Dependency: the Harness speech service
+## Recognition backends
 
-The plugin does not bundle its own ASR model. It calls the `speech` Remote that
-the shipped **voice-input bundle** (`@deepseek-ai/dsh-experimental-voice-input-bundle`)
-mounts, and uses whichever provider that service selects — by default the local
-SenseVoiceSmall ONNX model, running on the machine that runs Harness.
+### Local SenseVoice (default)
 
-Consequences:
+The plugin calls the `speech` Remote that the shipped **voice-input bundle**
+(`@deepseek-ai/dsh-experimental-voice-input-bundle`) mounts, and uses whichever
+provider that service selects — by default the local SenseVoiceSmall ONNX model,
+running on the machine that runs Harness. Audio never leaves the machine for a
+`host-local` provider and never enters the conversation log or attachments.
 
-- First use requires downloading the local model (about 239 MB INT8). The panel
-  drives that download itself; settings are shared with the voice-input plugin.
-- Audio never leaves the Harness machine for a `host-local` provider and is
-  never written into the conversation log or attachments. Only the transcript
-  the user keeps is stored, in this browser's `localStorage`.
-- Only complete-recording transcription is exposed by that service, so the
-  “real time” here is chunked near-real-time (partial captions during speech and
-  a final line at each pause), not a streaming token feed.
+### Volcengine SeedASR (cloud, optional)
+
+The Host half talks to `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async`
+with `X-Api-Key` and the `volc.seedasr.sauc.duration` resource. This is the same
+provider Type4Me uses; open **Recognition settings** in the panel and paste the
+API key from Type4Me (or set `FACECHAT_VOLC_API_KEY` / `VOLCENGINE_VOICE_API_KEY`
+in the DSH Host environment). The key is stored in
+`~/.dsh/plugin-data/facechat-recorder/settings.json` with mode `0600` and is never
+returned to the browser. Hotwords configured in the panel are merged with the
+built-in technical terms and the glossary.
+
+**Privacy:** in this mode each finalized utterance's audio is uploaded to
+Volcengine. Select it only when that is acceptable.
+
+### Codex CLI polish (optional, Host-local)
+
+`Codex polish` in the transcript footer sends up to 30 final lines per request to
+the Codex CLI already signed in on this Mac (`codex exec`, model
+`gpt-5.6-luna` by default). Codex receives the transcript text, fixes recognition
+errors and returns JSON that is applied by line id, preserving speakers and
+timestamps. It consumes your Codex account quota; nothing runs automatically.
+
+The local path needs the local model (about 239 MB INT8, downloaded by the panel)
+and total transcription is chunked near-real-time. The cloud path and Codex
+polish need a **DSH restart** after installing/updating this bundle so the Host
+half and its `/plugin/facechat` routes are mounted; refresh the page afterwards.
 
 ## Install
 
@@ -77,9 +104,12 @@ Consequences:
 plugin_manager({ action: "install_bundle", target: "<absolute path to this directory>" })
 ```
 
-The bundle inserts one Host row (`facechat-recorder`, host half empty) and serves
-`client.js` as the Client artifact. Removing the bundle removes the page, its
-sidebar entry, the history view and the engine.
+The bundle inserts one Host row (`facechat-recorder`) and serves `client.js` as
+the Client artifact. **Restart DSH after installing or updating** so the Host
+half registers `/plugin/facechat` (cloud ASR, Codex polish and settings); then
+refresh the Harness page. Removing the bundle removes the page, its sidebar
+entry, the stored settings view and the engine; the Host settings file remains
+until you delete it manually.
 
 ## Version log
 
@@ -110,13 +140,20 @@ re-syncs. Never use the harness value for an external edit.
 | --- | --- |
 | `package.json` | Bundle manifest: patch pointer, Client artifact, locale/icon exports |
 | `cordis.patch.yml` | Loader patch inserting the `facechat-recorder` row |
-| `index.js` | Host half — empty `apply()`; the UI lives in the Client half |
-| `client.js` | VAD, MFCC/pitch embedding, online speaker clustering, glossary correction, capture engine, transcription queue, history/draft storage, version-log registration and views |
+| `index.js` | Host half: same-origin `/plugin/facechat` routes (config, Volcengine ASR, Codex polish) |
+| `host/settings.js` | Host-only settings and API-key storage (mode `0600`, sanitized public config) |
+| `host/volcengine.js` | Volcengine SeedASR WebSocket client (SAUC protocol, gzip, hotwords, WAV validation) |
+| `host/codex.js` | Codex CLI proofreader (JSON Schema output, batching, timeout, line-count validation) |
+| `client.js` | VAD, MFCC/pitch embedding, online speaker clustering, glossary correction, capture engine, local/cloud transcription queue, Codex polish action, history/draft storage, version-log registration and views |
 | `locale/en.json`, `locale/zh.json` | Plugin Manager title and description |
 | `icon.svg` | Original microphone artwork |
 | `test/dsp.test.mjs` | Headless WAV/FFT/pitch/VAD/embedding/clustering and glossary-rule checks against the shipped module |
+| `test/host-volc.test.mjs` | Local WebSocket server test of the Volcengine handshake, SAUC frames, hotwords, audio payload and transcript parsing |
+| `test/host-codex.test.mjs` | Host settings/key safety, Codex prompt and structured-output parsing, fake-process integration |
+| `test/host-routes.test.mjs` | Host route tests over loopback HTTP: sanitized config, key persistence, origin guard, validation |
+| `test/client-cloud.test.mjs` | Client backend gating: cloud starts without local ASR, missing Host/key errors, local mode unchanged |
 | `test/plugin.test.mjs` | Headless apply/slot-registration/locale/bridge lifecycle check |
-| `test/render.test.mjs` | Headless page, glossary-dialog and summary render smoke test |
+| `test/render.test.mjs` | Headless page, glossary/settings dialogs, cloud backend, summary and polish-action render smoke test |
 | `test/resource.test.mjs` | Headless check of the `facechat` resource Provider (registration, search, read, labels) |
 
 Run the checks with:
@@ -126,6 +163,10 @@ node test/dsp.test.mjs
 node test/plugin.test.mjs
 node test/render.test.mjs
 node test/resource.test.mjs
+node test/host-volc.test.mjs
+node test/host-codex.test.mjs
+node test/host-routes.test.mjs
+node test/client-cloud.test.mjs
 ```
 
 ## Device resource Provider
@@ -164,40 +205,42 @@ same `loadHistoryState()` reader the page uses.
    and a spectral-centroid term; `createSpeakerClusterer` assigns the utterance
    to an existing centroid or opens a new speaker. The utterance is appended to
    the transcript as a pending line.
-4. `createTranscriptionQueue` encodes canonical 16 kHz mono PCM16 WAV, base64
-   encodes it and calls `speech.transcribe`. Finals are FIFO and never dropped;
-   interim captions are best-effort and skipped while a final is pending.
+4. `createTranscriptionQueue` encodes canonical 16 kHz mono PCM16 WAV and sends
+   it either to `speech.transcribe` (local) or to the Host
+   `/plugin/facechat/transcribe` route (Volcengine). Finals are FIFO and never
+   dropped; interim captions are local-only because cloud requests are billed.
 5. Results are cleaned of SenseVoice rich-text tokens, run through the glossary
    (built-in terms plus the user's `wrong=correct` rules), and rendered; speaker
    names and line reassignments update the live draft and, after stopping, the
-   browser history. The summary is derived from the corrected transcript, so
-   identity, attribution and speaking-share statistics stay in sync.
+   browser history. `Codex polish` then rewrites line text by id through the
+   Host route. The summary is derived from the corrected transcript, so identity,
+   attribution and speaking-share statistics stay in sync.
 
 ## Improving recognition accuracy
 
-The shipped recognizer is the compact SenseVoiceSmall model. It is fast and
+The local recognizer is the compact SenseVoiceSmall model. It is fast and
 offline, but it mangles technical proper nouns in Chinese/English code-switching
 speech. Practical improvements, in order of effect:
 
-1. **Set the recognition language explicitly.** Leave Automatic only for unknown
-   languages; for Chinese/English meetings choose 中文. Automatic language
-   detection is the main source of errors in mixed-language sentences.
-2. **Add the terms you actually say** to 术语表, for example
+1. **Use Volcengine SeedASR** if you have the Type4Me API key. Open
+   **Recognition settings**, choose Volcengine, paste the key and (optionally)
+   add your Type4Me hotwords. It sends each finalized utterance to the cloud and
+   returns noticeably better Chinese/English technical terms than the local
+   model.
+2. **Run Codex polish** on a finished transcript. It fixes remaining recognition
+   errors with the local Codex account, keeps every speaker line and timestamp,
+   and is explicit about sending text to OpenAI.
+3. **Set the recognition language explicitly** in local mode; for
+   Chinese/English meetings choose 中文 instead of Automatic.
+4. **Add the terms you actually say** to 术语表, for example
    `gethub=GitHub`, `bench mark=benchmark`, `deepreek=DeepSeek`, `内部平台=内部平台`.
    The built-in list already covers GitHub, benchmark, DeepSeek, DeepSeek-R1/V3,
    Deep Research, API, LLM, RAG, prompt, fine-tune, inference and friends.
-3. **Use the bigger SenseVoice weights.** The provider supports them, but it is
-   a Host-side setting: in the profile patch, set `precision: fp32` on the
-   `speech-to-text-sensevoice` row (about 938 MB instead of 239 MB, slower on
-   CPU), then restart. This is a general accuracy/speed trade-off, not a fix for
-   domain vocabulary.
-4. **Keep the microphone between the speakers** and avoid strong noise
-   suppression or far-field pickup; the panel already keeps a 360 ms pre-roll and
-   a 640 ms pause before it closes a sentence.
-
-There is no cloud fallback in the shipped voice-input bundle: audio stays local.
-If a higher-accuracy cloud recognizer is added to the speech provider list later,
-this plugin will use it through the same service without UI changes.
+5. **Use the bigger local weights** (optional): set `precision: fp32` on the
+   `speech-to-text-sensevoice` row in the profile patch (about 938 MB instead of
+   239 MB, slower on CPU), then restart.
+6. **Keep the microphone between the speakers** and avoid far-field pickup; the
+   panel keeps a 360 ms pre-roll and a 640 ms pause before closing a sentence.
 
 ## Known limitations
 
@@ -216,5 +259,12 @@ this plugin will use it through the same service without UI changes.
   lost on refresh (the transcript is kept).
 - The page needs a working microphone permission and a loopback/HTTPS origin
   (the Harness Web UI already is one).
-- If the voice-input bundle is disabled, the page stays visible but records
-  nothing and explains that the speech service is unavailable.
+- If the voice-input bundle is disabled in **local** mode, the page stays visible
+  but records nothing and explains that the speech service is unavailable. The
+  Volcengine backend and Codex polish live in this bundle's own Host half and do
+  not need the voice-input bundle.
+- Cloud privacy: Volcengine mode uploads audio; Codex polish sends transcript
+  text to OpenAI. The API key is stored on the Host (`0600`) and the browser only
+  ever sees `configured: true/false`.
+- Codex polish is on-demand and batched (30 lines per request); it can take tens
+  of seconds for a long meeting and consumes Codex quota.

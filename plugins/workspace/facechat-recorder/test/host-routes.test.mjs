@@ -86,6 +86,23 @@ result = await call('/config', {
 assert.equal(result.status, 400, 'invalid provider rejected')
 ok('config validation errors are returned as JSON errors')
 
+result = await call('/transcribe', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', origin },
+  body: JSON.stringify({}),
+})
+assert.equal(result.status, 400, 'missing audio rejected')
+assert.equal(result.body.error.code, 'audio-missing')
+
+result = await call('/polish', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', origin },
+  body: JSON.stringify({ lines: [] }),
+})
+assert.equal(result.status, 400, 'empty polish request rejected')
+assert.equal(result.body.error.code, 'codex-empty')
+ok('cloud and polish routes validate their input without calling external services')
+
 result = await call('/health')
 assert.equal(result.status, 200)
 assert.equal(result.body.ok, true)

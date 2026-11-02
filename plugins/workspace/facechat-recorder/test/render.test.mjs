@@ -86,7 +86,7 @@ const plugin = loaded.factory((name) => {
   if (name === 'react') return ReactStub;
   throw new Error('unexpected require: ' + name);
 });
-const { FacechatPanel, buildMarkdown, buildIdentitySummary, SummaryView, GlossaryDialog } = plugin.__ui;
+const { FacechatPanel, buildMarkdown, buildIdentitySummary, SummaryView, GlossaryDialog, CloudSettingsDialog } = plugin.__ui;
 
 /* --- Fakes -------------------------------------------------------------- */
 
@@ -229,11 +229,50 @@ const glossary = {
   },
 };
 
-function render(state, speechSnap = makeSpeechSnap(), sessionList = []) {
+const localCloudConfig = {
+  provider: 'local',
+  volc: {
+    configured: false,
+    source: 'none',
+    resourceId: 'volc.seedasr.sauc.duration',
+    language: 'zh-CN',
+    hotwords: ['GitHub'],
+    languages: ['zh-CN', 'en-US', 'auto'],
+  },
+  codex: { model: 'gpt-5.6-luna' },
+};
+const volcCloudConfig = Object.assign({}, localCloudConfig, {
+  provider: 'volc',
+  volc: Object.assign({}, localCloudConfig.volc, { configured: true, source: 'stored' }),
+});
+const cloud = {
+  state: { available: true, loading: false, saving: false, error: null, config: localCloudConfig },
+  getSnapshot() {
+    return this.state;
+  },
+  subscribe() {
+    return () => {};
+  },
+  refresh() {
+    return Promise.resolve();
+  },
+  save() {
+    return Promise.resolve({ ok: true });
+  },
+  transcribe() {
+    return Promise.resolve({ ok: true, text: '' });
+  },
+  polish() {
+    return Promise.resolve({ ok: true, lines: [] });
+  },
+};
+
+function render(state, speechSnap = makeSpeechSnap(), sessionList = [], cloudConfig = localCloudConfig) {
   engine.state = Object.assign({}, baseState, state);
   speech.snap = speechSnap;
   history.state = { sessions: sessionList, error: null };
-  return renderComponent(FacechatPanel, { t, locale: localeFace, engine, speech, history, glossary });
+  cloud.state = Object.assign({}, cloud.state, { config: cloudConfig });
+  return renderComponent(FacechatPanel, { t, locale: localeFace, engine, speech, history, glossary, cloud });
 }
 
 function collectText(node, out = []) {
@@ -344,6 +383,8 @@ assert.ok(findClass(review, 'dsh-facechat-history-row').length === 1, 'history r
 assert.equal(findClass(review, 'dsh-facechat-view-tab').length, 2, 'transcript and summary tabs');
 assert.equal(findClass(review, 'dsh-facechat-speaker-merge').length, 2, 'one merge control per speaker');
 assert.ok(reviewText.includes('glossary'), 'glossary action in the header');
+assert.ok(reviewText.includes('settings'), 'recognition settings action in the header');
+assert.ok(reviewText.includes('polish'), 'Codex polish action with transcript lines');
 ok('saved recording page renders review head, history and export controls');
 
 /* --- 3b. Accuracy aids: language hint and glossary dialog --------------- */
@@ -370,6 +411,35 @@ assert.ok(glossaryAreas[0].props.placeholder.includes('glossaryPlaceholder'), 'g
 assert.ok(glossaryText.includes('GitHub'), 'built-in glossary terms listed');
 assert.ok(glossaryText.includes('glossaryReset'), 'restore-defaults action');
 ok('glossary dialog renders rules, built-in terms and actions');
+
+/* --- 3c. Volcengine backend and recognition settings -------------------- */
+
+const cloudBackend = render({}, makeSpeechSnap(), [], volcCloudConfig);
+const cloudText = collectText(cloudBackend).join('|');
+assert.ok(cloudText.includes('cloudReady'), 'cloud backend status');
+assert.ok(cloudText.includes('cloudBannerReady'), 'cloud privacy/ready banner');
+assert.ok(cloudText.includes('openSettings'), 'cloud banner opens settings');
+ok('Volcengine backend renders readiness and the cloud banner');
+
+const cloudDialog = renderComponent(CloudSettingsDialog, {
+  t,
+  activeLocale: 'zh',
+  cloud,
+  cloudSnap: { available: true, loading: false, saving: false, error: null, config: volcCloudConfig },
+  onClose: () => {},
+  onSaved: () => {},
+  onRefresh: () => {},
+});
+const cloudDialogText = collectText(cloudDialog).join('|');
+assert.ok(cloudDialogText.includes('settingsTitle'), 'settings dialog title');
+assert.ok(cloudDialogText.includes('backendLocal') && cloudDialogText.includes('backendVolc'), 'backend choices');
+assert.ok(cloudDialogText.includes('volcKey'), 'Volcengine key field');
+assert.ok(cloudDialogText.includes('codexPrivacy'), 'Codex privacy note');
+assert.ok(cloudDialogText.includes('settingsSave'), 'settings save action');
+const secretInputs = findClass(cloudDialog, 'dsh-facechat-settings-input').filter((node) => node.props.type === 'password');
+assert.equal(secretInputs.length, 1, 'one API key input');
+assert.ok(secretInputs[0].props.placeholder.includes('volcKeyConfigured'), 'configured key is not echoed');
+ok('recognition settings dialog renders providers, key field and Codex settings');
 
 
 /* --- 4. Saved recording with audio, unavailable speech and an error ----- */
