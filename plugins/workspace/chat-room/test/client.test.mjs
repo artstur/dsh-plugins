@@ -107,6 +107,19 @@ test('pinned conversations sort first and notes to myself stay on top', () => {
   );
 });
 
+test('the avatar editor belongs to the self side only', () => {
+  const { canEditOwnAvatar } = loadClient().__test;
+  // Notes to myself ("我聊") are the main/self state, so its edit dialog can
+  // change the local avatar.
+  assert.equal(canEditOwnAvatar({ id: 'me', self: true }), true);
+  // A normal contact is the other person: this machine does not own their
+  // avatar, so their edit dialog stays without an avatar editor.
+  assert.equal(canEditOwnAvatar({ id: 'other', name: 'Alex' }), false);
+  assert.equal(canEditOwnAvatar({ id: 'selfish', self: 'true' }), false);
+  assert.equal(canEditOwnAvatar(null), false);
+  assert.equal(canEditOwnAvatar(undefined), false);
+});
+
 test('the right-click pin menu stays inside the viewport', () => {
   const { clampMenuPosition } = loadClient().__test;
   const viewport = { width: 1024, height: 768 };

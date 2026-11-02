@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.13.0.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.13.1.tgz';
 
     /* An avatar is stored as a small square data URL: the picker crops and
        shrinks whatever picture is chosen, so the saved state stays light. */
@@ -50,7 +50,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.13.0';
+    const CLIENT_BUILD = '1.13.1';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
@@ -407,6 +407,13 @@ window.__ModuleLoader__.load({
         const rightAt = right.lastMessage ? right.lastMessage.at : right.createdAt || 0;
         return rightAt - leftAt;
       });
+    }
+
+    /** The owner of this install is the only side with an editable avatar:
+     *  notes to myself ("我聊") are the main/self state, while a normal contact
+     *  row belongs to the other person, whose avatar this machine does not own. */
+    function canEditOwnAvatar(contact) {
+      return Boolean(contact && contact.self === true);
     }
 
     function statusLabel(status, t) {
@@ -1745,6 +1752,12 @@ window.__ModuleLoader__.load({
         setRemoveArmed(false);
         setFormError('');
         setCopied('');
+        // The self chat is the main state: its "编辑" dialog also carries the
+        // owner's avatar. A normal contact is the other side, which has no
+        // avatar this machine could edit.
+        if (canEditOwnAvatar(contact)) {
+          setSettingsAvatar((state && state.self && state.self.avatar) || '');
+        }
         setOverlay({ kind: 'info', contactId: contact.id });
       };
 
@@ -1802,6 +1815,66 @@ window.__ModuleLoader__.load({
         }
         return h('span', { className: 'dsh-msg-avatar' }, initial(contact.name || ''));
       };
+
+      /* The avatar picker edits the local profile only. It is shared by the
+         settings dialog and the "编辑" dialog of the self chat, so picking a
+         picture fills the same preview and the same Save action stores it.
+         `name` is only used for the letter placeholder. */
+      const renderAvatarField = (name) =>
+        h(
+          'div',
+          { className: 'dsh-msg-field' },
+          h('span', { className: 'dsh-msg-label' }, t('avatarTitle')),
+          h(
+            'div',
+            { className: 'dsh-msg-avatar-editor' },
+            settingsAvatar
+              ? h('img', {
+                  className: 'dsh-msg-avatar dsh-msg-avatar--image dsh-msg-avatar--preview',
+                  src: settingsAvatar,
+                  alt: t('avatarTitle'),
+                })
+              : h(
+                  'span',
+                  { className: 'dsh-msg-avatar dsh-msg-avatar--preview' },
+                  initial(name || ''),
+                ),
+            h(
+              'div',
+              { className: 'dsh-msg-avatar-actions' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-msg-btn',
+                  onClick: () => {
+                    if (avatarInputRef.current) avatarInputRef.current.click();
+                  },
+                },
+                settingsAvatar ? t('avatarChange') : t('avatarPick'),
+              ),
+              settingsAvatar
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dsh-msg-btn dsh-msg-btn--ghost',
+                      onClick: () => setSettingsAvatar(''),
+                    },
+                    t('avatarRemove'),
+                  )
+                : null,
+              h('input', {
+                ref: avatarInputRef,
+                type: 'file',
+                accept: 'image/png,image/jpeg,image/webp',
+                style: { display: 'none' },
+                onChange: (event) => void handleAvatarFile(event),
+              }),
+            ),
+          ),
+          h('span', { className: 'dsh-msg-small' }, t('avatarHint')),
+        );
 
       const renderOverlay = () => {
         if (!overlay) return null;
@@ -2111,60 +2184,7 @@ window.__ModuleLoader__.load({
                   closeGlyph(13),
                 ),
               ),
-              h(
-                'div',
-                { className: 'dsh-msg-field' },
-                h('span', { className: 'dsh-msg-label' }, t('avatarTitle')),
-                h(
-                  'div',
-                  { className: 'dsh-msg-avatar-editor' },
-                  settingsAvatar
-                    ? h('img', {
-                        className: 'dsh-msg-avatar dsh-msg-avatar--image dsh-msg-avatar--preview',
-                        src: settingsAvatar,
-                        alt: t('avatarTitle'),
-                      })
-                    : h(
-                        'span',
-                        { className: 'dsh-msg-avatar dsh-msg-avatar--preview' },
-                        initial(settingsNick || ''),
-                      ),
-                  h(
-                    'div',
-                    { className: 'dsh-msg-avatar-actions' },
-                    h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'dsh-msg-btn',
-                        onClick: () => {
-                          if (avatarInputRef.current) avatarInputRef.current.click();
-                        },
-                      },
-                      settingsAvatar ? t('avatarChange') : t('avatarPick'),
-                    ),
-                    settingsAvatar
-                      ? h(
-                          'button',
-                          {
-                            type: 'button',
-                            className: 'dsh-msg-btn dsh-msg-btn--ghost',
-                            onClick: () => setSettingsAvatar(''),
-                          },
-                          t('avatarRemove'),
-                        )
-                      : null,
-                    h('input', {
-                      ref: avatarInputRef,
-                      type: 'file',
-                      accept: 'image/png,image/jpeg,image/webp',
-                      style: { display: 'none' },
-                      onChange: (event) => void handleAvatarFile(event),
-                    }),
-                  ),
-                ),
-                h('span', { className: 'dsh-msg-small' }, t('avatarHint')),
-              ),
+              renderAvatarField(settingsNick),
               h(
                 'label',
                 { className: 'dsh-msg-field' },
@@ -2370,6 +2390,12 @@ window.__ModuleLoader__.load({
                 onChange: (event) => setRenameDraft(event.target.value),
               }),
             ),
+            // The self chat is the main state, so its "编辑" dialog carries the
+            // owner's avatar next to the display name. A normal contact is the
+            // other side; that contact's avatar cannot be edited here.
+            canEditOwnAvatar(contact)
+              ? renderAvatarField((state && state.self && state.self.nick) || contact.name || '')
+              : null,
             formError ? h('div', { className: 'dsh-msg-error' }, formError) : null,
             h('div', { className: 'dsh-msg-divider' }),
             h(
@@ -2424,6 +2450,16 @@ window.__ModuleLoader__.load({
                     if (!name) {
                       setFormError(t('needName'));
                       return;
+                    }
+                    // The avatar belongs to the local profile, so it is saved
+                    // first: a rejected picture never renames the contact.
+                    const currentAvatar = (state && state.self && state.self.avatar) || '';
+                    if (canEditOwnAvatar(contact) && settingsAvatar !== currentAvatar) {
+                      const saved = await post('/self', { avatar: settingsAvatar });
+                      if (!saved.ok) {
+                        setFormError(saved.detail || t('loadError'));
+                        return;
+                      }
                     }
                     const result = await post('/contacts/rename', { id: contact.id, name });
                     if (!result.ok) {
@@ -3576,6 +3612,7 @@ window.__ModuleLoader__.load({
         pickPastedImage,
         formatUnreadTitle,
         sortContacts,
+        canEditOwnAvatar,
         clampMenuPosition,
         localeWords: DICTS,
       },
@@ -3620,8 +3657,24 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.13.0',
+            version: '1.13.1',
             entries: [
+              {
+                version: '1.13.1',
+                at: '2026-11-02T19:52+08:00',
+                source: 'self-driven',
+                sourceName: 'DeepSeek Harness',
+                points: {
+                  zh: [
+                    '头像入口加进「编辑」弹窗：打开「我聊」→「编辑」，在备注名下面就能选、换、移除自己的头像，和备注名一起点「保存」生效',
+                    '只有自己的头像（主态）能编辑，联系人里的对方（客态）没有头像入口；「我的设置」里的头像入口照旧保留',
+                  ],
+                  en: [
+                    'The avatar editor now also lives in the "Edit" dialog: open "Chat with myself" → "Edit" and pick, change or remove your avatar right below the display name, saved with the same button',
+                    'Only your own avatar (the main/self side) is editable; a normal contact (the other side) has no avatar entry, and My settings keeps its avatar entry as before',
+                  ],
+                },
+              },
               {
                 version: '1.13.0',
                 at: '2026-11-02T15:25+08:00',
