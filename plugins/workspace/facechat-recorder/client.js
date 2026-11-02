@@ -18,6 +18,7 @@ window.__ModuleLoader__.load({
 
     const NS = 'facechat';
     const PANEL_ID = 'facechat';
+    const CLOUD_API_PREFIX = '/plugin/facechat';
 
     const STORAGE_KEY = 'dsh.facechat.v1';
     const DRAFT_KEY = 'dsh.facechat.draft.v1';
@@ -27,6 +28,27 @@ window.__ModuleLoader__.load({
     const LANGUAGE_TIP_KEY = 'dsh.facechat.language-tip.v1';
     const MAX_HISTORY = 120;
     const MAX_STORE_BYTES = 3600000;
+
+    const CLOUD_LANGUAGES = [
+      { id: 'zh-CN', zh: '中文', en: 'Chinese' },
+      { id: 'en-US', zh: '英语', en: 'English' },
+      { id: 'ja-JP', zh: '日语', en: 'Japanese' },
+      { id: 'ko-KR', zh: '韩语', en: 'Korean' },
+      { id: 'yue-CN', zh: '粤语', en: 'Cantonese' },
+      { id: 'auto', zh: '自动（中英）', en: 'Automatic (Chinese/English)' },
+    ];
+    const CLOUD_DEFAULT_CONFIG = {
+      provider: 'local',
+      volc: {
+        configured: false,
+        source: 'none',
+        resourceId: 'volc.seedasr.sauc.duration',
+        language: 'zh-CN',
+        hotwords: [],
+        languages: CLOUD_LANGUAGES.map((item) => item.id),
+      },
+      codex: { model: 'gpt-5.6-luna' },
+    };
 
     /* Capture / analysis constants. */
     const TARGET_RATE = 16000;
@@ -95,6 +117,44 @@ window.__ModuleLoader__.load({
         gotIt: '知道了',
         mergeInto: '合并到…',
         mergeSpeaker: '合并话者',
+        settings: '识别设置',
+        settingsTitle: '识别与润色',
+        settingsHint: '本地 SenseVoice 离线运行；火山引擎 SeedASR 会把音频发送到云端；Codex 润色会把转写文字发送到 OpenAI。',
+        backendLabel: '识别引擎',
+        backendLocal: '本地 SenseVoice（离线）',
+        backendVolc: '火山引擎 SeedASR（云端）',
+        cloudAsr: '火山引擎',
+        cloudReady: '火山引擎已就绪',
+        cloudUnconfigured: '火山引擎未配置',
+        cloudUnavailable: '云端服务未加载',
+        cloudBannerReady: '火山引擎 SeedASR 已就绪；录音音频会上传到火山引擎。',
+        cloudPrivacy: '火山引擎模式下音频会发送到云端，由火山引擎转写。',
+        volcKey: '火山引擎 API Key',
+        volcKeyPlaceholder: '粘贴 Type4Me 里使用的 API Key',
+        volcKeyConfigured: '已配置（留空保持不变）',
+        volcKeyClear: '清除已保存的 Key',
+        volcResourceId: '资源 ID',
+        volcLanguage: '识别语言',
+        volcHotwords: '热词（每行一个，可选）',
+        volcHotwordsHint: '默认已带 GitHub、benchmark、DeepSeek 等；可补充 Type4Me 的 hotwords。',
+        codexModel: 'Codex 模型',
+        codexPrivacy: '使用本机已登录的 Codex CLI；转写文字会发送到 OpenAI 并消耗 Codex 配额。',
+        settingsSave: '保存设置',
+        settingsSaving: '正在保存…',
+        settingsSaved: '设置已保存',
+        cloudRestartHint: 'Host 端服务未加载：安装或更新插件后需要重启 DSH，再刷新页面。',
+        openSettings: '打开识别设置',
+        polish: 'Codex 润色',
+        polishing: '润色中…',
+        polishDone: '已润色 {n} 行',
+        polishNoLines: '还没有可润色的文字',
+        codexUnavailable: 'Codex 润色服务未加载，请重启 DSH 后重试。',
+        cloudTranscribeFailed: '云端识别失败：{message}',
+        errorCloudNotConfigured: '请先在「识别设置」里选择火山引擎并填写 API Key。',
+        errorCloudUnavailable: '云端识别服务未就绪，请重启 DSH 后刷新页面。',
+        cloudSourceStored: '已保存在本机',
+        cloudSourceEnv: '来自环境变量',
+        cloudSourceNone: '未配置',
         speakerStats: '{n} 段 · {time}',
         speakerMenuTitle: '选择这个片段的话者',
         changeSpeaker: '更改话者',
@@ -226,6 +286,44 @@ window.__ModuleLoader__.load({
         gotIt: 'Got it',
         mergeInto: 'Merge into…',
         mergeSpeaker: 'Merge speaker',
+        settings: 'Recognition settings',
+        settingsTitle: 'Recognition & polish',
+        settingsHint: 'Local SenseVoice runs offline; Volcengine SeedASR sends audio to the cloud; Codex polish sends transcript text to OpenAI.',
+        backendLabel: 'Recognition engine',
+        backendLocal: 'Local SenseVoice (offline)',
+        backendVolc: 'Volcengine SeedASR (cloud)',
+        cloudAsr: 'Volcengine',
+        cloudReady: 'Volcengine ready',
+        cloudUnconfigured: 'Volcengine not configured',
+        cloudUnavailable: 'Cloud service not loaded',
+        cloudBannerReady: 'Volcengine SeedASR is ready; recording audio is sent to Volcengine.',
+        cloudPrivacy: 'In Volcengine mode the audio is sent to the cloud and transcribed there.',
+        volcKey: 'Volcengine API key',
+        volcKeyPlaceholder: 'Paste the API key used by Type4Me',
+        volcKeyConfigured: 'Configured (leave blank to keep it)',
+        volcKeyClear: 'Clear the saved key',
+        volcResourceId: 'Resource ID',
+        volcLanguage: 'Recognition language',
+        volcHotwords: 'Hotwords (one per line, optional)',
+        volcHotwordsHint: 'GitHub, benchmark, DeepSeek and friends are included by default; add the Type4Me hotwords here.',
+        codexModel: 'Codex model',
+        codexPrivacy: 'Uses the Codex CLI already signed in on this Mac; transcript text is sent to OpenAI and consumes Codex quota.',
+        settingsSave: 'Save settings',
+        settingsSaving: 'Saving…',
+        settingsSaved: 'Settings saved',
+        cloudRestartHint: 'The Host service is not loaded: restart DSH after installing or updating the plugin, then refresh this page.',
+        openSettings: 'Open recognition settings',
+        polish: 'Codex polish',
+        polishing: 'Polishing…',
+        polishDone: 'Polished {n} lines',
+        polishNoLines: 'No transcript text to polish yet',
+        codexUnavailable: 'The Codex polish service is not loaded. Restart DSH and retry.',
+        cloudTranscribeFailed: 'Cloud recognition failed: {message}',
+        errorCloudNotConfigured: 'Open Recognition settings, choose Volcengine and enter an API key first.',
+        errorCloudUnavailable: 'Cloud recognition is not ready. Restart DSH, then refresh this page.',
+        cloudSourceStored: 'Saved on this Mac',
+        cloudSourceEnv: 'From environment variable',
+        cloudSourceNone: 'Not configured',
         speakerStats: '{n} lines · {time}',
         speakerMenuTitle: 'Choose the speaker for this line',
         changeSpeaker: 'Change speaker',
@@ -605,6 +703,11 @@ window.__ModuleLoader__.load({
         },
         refine(text) {
           return refine(text);
+        },
+        hotwords() {
+          const terms = new Set(DEFAULT_GLOSSARY.map((entry) => entry.term));
+          for (const rule of parseGlossaryText(userText)) terms.add(rule.term);
+          return Array.from(terms).slice(0, 40);
         },
       };
     }
@@ -1398,6 +1501,179 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ *
+     * Cloud accuracy bridge
+     *
+     * Talks to this bundle's Host half (`/plugin/facechat`): Volcengine SeedASR
+     * and Codex CLI proofreading both live on the Host so API keys and local
+     * command execution never enter the browser. The bridge stays optional: if
+     * the Host route is not loaded yet (DSH needs a restart after installing the
+     * Host half), local SenseVoice keeps working and settings say so.
+     * ------------------------------------------------------------------ */
+
+    function createCloudBridge() {
+      let current = {
+        available: false,
+        loading: true,
+        saving: false,
+        error: null,
+        config: null,
+      };
+      const listeners = new Set();
+      const controllers = new Set();
+
+      function emit() {
+        for (const listener of Array.from(listeners)) {
+          try {
+            listener();
+          } catch (err) {
+            /* one faulty view must not stop the others */
+          }
+        }
+      }
+
+      function set(patch) {
+        current = Object.assign({}, current, patch);
+        emit();
+      }
+
+      function messageOf(error) {
+        if (error && error.code) return error.message || error.code;
+        if (error && error.message) return error.message;
+        return String(error);
+      }
+
+      async function request(path, options) {
+        const controller = new AbortController();
+        controllers.add(controller);
+        const merged = Object.assign(
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal,
+          },
+          options || {},
+        );
+        if (options && options.signal) {
+          merged.signal = options.signal;
+          try {
+            options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+          } catch (err) {
+            /* ignore */
+          }
+        }
+        try {
+          const response = await fetch(CLOUD_API_PREFIX + path, merged);
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (err) {
+            data = null;
+          }
+          if (!response.ok || !data || data.ok !== true) {
+            const envelope = data && data.error ? data.error : null;
+            const error = new Error(
+              envelope && envelope.message
+                ? envelope.message
+                : '云端识别服务返回 HTTP ' + response.status + '（如刚安装插件，请重启 DSH 后刷新页面）',
+            );
+            error.code = envelope && envelope.code ? envelope.code : 'cloud-http-' + response.status;
+            throw error;
+          }
+          return data;
+        } catch (error) {
+          if (error && error.name === 'AbortError') throw error;
+          throw error;
+        } finally {
+          controllers.delete(controller);
+        }
+      }
+
+      async function refresh() {
+        set({ loading: true });
+        try {
+          const data = await request('/config');
+          set({
+            available: true,
+            loading: false,
+            error: null,
+            config: data.config || CLOUD_DEFAULT_CONFIG,
+          });
+        } catch (error) {
+          set({
+            available: false,
+            loading: false,
+            error: messageOf(error),
+          });
+        }
+      }
+
+      async function save(patch) {
+        set({ saving: true });
+        try {
+          const data = await request('/config', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(patch),
+          });
+          set({
+            available: true,
+            saving: false,
+            error: null,
+            config: data.config || current.config,
+          });
+          return { ok: true, config: data.config };
+        } catch (error) {
+          set({ saving: false, error: messageOf(error) });
+          return { ok: false, error: messageOf(error), code: error && error.code };
+        }
+      }
+
+      async function transcribe({ audioBase64, language, hotwords, signal }) {
+        const data = await request('/transcribe', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ audioBase64, language, hotwords }),
+          signal,
+        });
+        return data;
+      }
+
+      async function polish({ lines, terms, language, model, signal }) {
+        const data = await request('/polish', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ lines, terms, language, model }),
+          signal,
+        });
+        return data;
+      }
+
+      return {
+        getSnapshot() {
+          return current;
+        },
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        refresh,
+        save,
+        transcribe,
+        polish,
+        dispose() {
+          for (const controller of Array.from(controllers)) {
+            try {
+              controller.abort();
+            } catch (err) {
+              /* ignore */
+            }
+          }
+          controllers.clear();
+        },
+      };
+    }
+
+    /* ------------------------------------------------------------------ *
      * Microphone capture
      * ------------------------------------------------------------------ */
 
@@ -1666,7 +1942,8 @@ window.__ModuleLoader__.load({
      * best-effort and skipped while a final is queued or running.
      * ------------------------------------------------------------------ */
 
-    function createTranscriptionQueue(speech, selection, handlers) {
+    function createTranscriptionQueue(transcribeFn, options, handlers) {
+      const allowInterim = !(options && options.allowInterim === false);
       const finals = [];
       let interimJob = null;
       let running = false;
@@ -1682,16 +1959,7 @@ window.__ModuleLoader__.load({
       }
 
       async function transcribe(job) {
-        const bytes = encodeWave(job.samples);
-        const request = { audioBase64: audioBase64(bytes) };
-        if (selection.providerId) request.providerId = selection.providerId;
-        if (selection.language) request.language = selection.language;
-        const result = await speech.transcribe(request, controller.signal);
-        if (result && typeof result === 'object' && 'ok' in result) {
-          if (result.ok) return result.value;
-          throw new Error(result.error && result.error.message ? result.error.message : 'transcription failed');
-        }
-        return result;
+        return transcribeFn(job, controller.signal);
       }
 
       function pump() {
@@ -1723,10 +1991,10 @@ window.__ModuleLoader__.load({
           pump();
         },
         canInterim() {
-          return !disposed && !running && !finals.length;
+          return allowInterim && !disposed && !running && !finals.length;
         },
         requestInterim(job) {
-          if (disposed || running || finals.length) return false;
+          if (!allowInterim || disposed || running || finals.length) return false;
           interimJob = job;
           pump();
           return true;
@@ -2172,6 +2440,7 @@ window.__ModuleLoader__.load({
       const speechBridge = deps.speech;
       const history = deps.history;
       const glossary = deps.glossary;
+      const cloud = deps.cloud;
 
       let state = {
         view: 'idle',
@@ -2474,23 +2743,40 @@ window.__ModuleLoader__.load({
 
       async function start() {
         if (state.phase === 'starting' || state.phase === 'recording' || state.phase === 'stopping') return;
+        const cloudState = cloud ? cloud.getSnapshot() : null;
+        const cloudConfig = cloudState && cloudState.config ? cloudState.config : CLOUD_DEFAULT_CONFIG;
+        const backend = cloudConfig.provider === 'volc' ? 'volc' : 'local';
         const speech = speechBridge.getSnapshot();
         const catalog = speech.catalog;
         const provider = catalog
           ? catalog.providers.find((item) => item.id === catalog.selection.providerId)
           : null;
-        if (!speech.available || !speech.connected) {
-          set({ error: { key: 'errorSpeechUnavailable' } });
-          return;
-        }
-        if (!catalog || !provider) {
-          set({ error: { key: 'errorNotReady' } });
-          return;
-        }
-        const preparation = provider.preparation && provider.preparation.phase;
-        if (preparation !== 'ready' && preparation !== 'standby' && preparation !== 'waking') {
-          set({ error: { key: 'errorNotReady' } });
-          return;
+        let language = '';
+        if (backend === 'volc') {
+          if (!cloudState || !cloudState.available) {
+            set({ error: { key: 'errorCloudUnavailable' } });
+            return;
+          }
+          if (!cloudConfig.volc || !cloudConfig.volc.configured) {
+            set({ error: { key: 'errorCloudNotConfigured' } });
+            return;
+          }
+          language = cloudConfig.volc.language || 'zh-CN';
+        } else {
+          if (!speech.available || !speech.connected) {
+            set({ error: { key: 'errorSpeechUnavailable' } });
+            return;
+          }
+          if (!catalog || !provider) {
+            set({ error: { key: 'errorNotReady' } });
+            return;
+          }
+          const preparation = provider.preparation && provider.preparation.phase;
+          if (preparation !== 'ready' && preparation !== 'standby' && preparation !== 'waking') {
+            set({ error: { key: 'errorNotReady' } });
+            return;
+          }
+          language = catalog.selection.language || '';
         }
         revokeAudio();
         clusterer = createSpeakerClusterer({});
@@ -2505,7 +2791,7 @@ window.__ModuleLoader__.load({
           notice: null,
           startedAt: 0,
           durationMs: 0,
-          language: catalog.selection.language || '',
+          language,
           title: '',
           lines: [],
           speakers: [{ name: '' }],
@@ -2517,12 +2803,36 @@ window.__ModuleLoader__.load({
           audioSessionId: null,
           recoveredDraft: null,
         });
+        const transcribeLocal = async (job, signal) => {
+          if (!speech.speech || typeof speech.speech.transcribe !== 'function') {
+            throw new Error('speech service unavailable');
+          }
+          const request = { audioBase64: audioBase64(encodeWave(job.samples)) };
+          if (provider) request.providerId = provider.id;
+          if (language) request.language = language;
+          const result = await speech.speech.transcribe(request, signal);
+          if (result && typeof result === 'object' && 'ok' in result) {
+            if (result.ok) return result.value;
+            throw new Error(result.error && result.error.message ? result.error.message : 'transcription failed');
+          }
+          return result;
+        };
+        const transcribeCloud = async (job, signal) => {
+          const result = await cloud.transcribe({
+            audioBase64: audioBase64(encodeWave(job.samples)),
+            language,
+            hotwords: glossary && typeof glossary.hotwords === 'function' ? glossary.hotwords() : [],
+            signal,
+          });
+          return {
+            text: result.text || '',
+            audioSeconds: Math.max(0, Number(result.audioMs) || 0) / 1000,
+            inferenceSeconds: Math.max(0, Number(result.inferenceMs) || 0) / 1000,
+          };
+        };
         queue = createTranscriptionQueue(
-          speech.speech,
-          {
-            providerId: provider.id,
-            language: catalog.selection.language || '',
-          },
+          backend === 'volc' ? transcribeCloud : transcribeLocal,
+          { allowInterim: backend !== 'volc' },
           { onResult: handleTranscription, onError: handleTranscriptionError },
         );
         vad = createVadSegmenter(handleVadEvent);
@@ -2856,6 +3166,41 @@ window.__ModuleLoader__.load({
         return capture ? capture.getLevel() : 0;
       }
 
+      /** Lines the Codex polish action may rewrite, in transcript order. */
+      function getPolishTargets() {
+        const source = state.view === 'review' && state.review ? state.review.lines : state.lines;
+        return source
+          .filter((line) => line.text && line.text.trim())
+          .map((line) => ({ id: line.id, text: line.text }));
+      }
+
+      /** Apply corrected text by line id, preserving speakers and timestamps. */
+      function applyPolishedTexts(entries) {
+        if (!Array.isArray(entries) || !entries.length) return false;
+        const byId = new Map();
+        for (const entry of entries) {
+          if (!entry || typeof entry.id !== 'string') continue;
+          const text = typeof entry.text === 'string' ? entry.text.trim() : '';
+          if (text) byId.set(entry.id, text);
+        }
+        if (!byId.size) return false;
+        if (state.view === 'review') {
+          updateReview((draft) => ({
+            lines: draft.lines.map((line) =>
+              byId.has(line.id) ? Object.assign({}, line, { text: byId.get(line.id) }) : line,
+            ),
+          }));
+          return true;
+        }
+        set({
+          lines: state.lines.map((line) =>
+            byId.has(line.id) ? Object.assign({}, line, { text: byId.get(line.id) }) : line,
+          ),
+        });
+        scheduleDraft();
+        return true;
+      }
+
       function dispose() {
         if (draftTimer) {
           clearTimeout(draftTimer);
@@ -2892,6 +3237,8 @@ window.__ModuleLoader__.load({
         reassignLine,
         mergeSpeakers,
         reapplyGlossary,
+        getPolishTargets,
+        applyPolishedTexts,
         updateTitle,
         deleteSession,
         recoverDraft,
@@ -3195,6 +3542,20 @@ window.__ModuleLoader__.load({
       ]);
     }
 
+    function settingsGlyph(size) {
+      return iconFrame(size, [
+        h('circle', { key: 'c', cx: 12, cy: 12, r: 3 }),
+        h('path', { key: 'a', d: 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.7 2.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-3.8v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-2.7-2.7.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3v-3.8h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.7-2.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3h3.8v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.7 2.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1H21v3.8h-.1a1.7 1.7 0 0 0-1.5 1.1z' }),
+      ]);
+    }
+
+    function sparkleGlyph(size) {
+      return iconFrame(size, [
+        h('path', { key: 'a', d: 'M12 3.5 13.8 9l5.5 1.8-5.5 1.8L12 18l-1.8-5.4L4.7 10.8 10.2 9z' }),
+        h('path', { key: 'b', d: 'M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z' }),
+      ]);
+    }
+
     function FacechatIcon(props) {
       const size = props && typeof props.size === 'number' && props.size > 0 ? props.size : 20;
       const active = !!(props && props.active);
@@ -3415,6 +3776,20 @@ window.__ModuleLoader__.load({
       '.dsh-facechat-glossary-defaults{max-height:150px;overflow-y:auto;margin-top:6px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-2);line-height:1.65}',
       '.dsh-facechat-glossary-defaults b{font-weight:600;color:var(--dsw-alias-label-primary)}',
       '.dsh-facechat-modal-actions{display:flex;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap}',
+      '.dsh-facechat-settings-card{width:min(620px,94vw);overflow-y:auto}',
+      '.dsh-facechat-settings-group{display:flex;flex-direction:column;gap:6px;margin:0;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;min-width:0}',
+      '.dsh-facechat-settings-group legend{padding:0 5px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-primary)}',
+      '.dsh-facechat-settings-radio,.dsh-facechat-settings-check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dsw-alias-label-primary);cursor:pointer}',
+      '.dsh-facechat-settings-check{font-size:11.5px;color:var(--dsw-alias-label-secondary)}',
+      '.dsh-facechat-settings-radio input,.dsh-facechat-settings-check input{accent-color:var(--dsw-alias-brand-primary)}',
+      '.dsh-facechat-settings-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;margin-top:2px}',
+      '.dsh-facechat-settings-badge{font-size:10.5px;color:var(--dsw-alias-label-secondary)}',
+      '.dsh-facechat-settings-label{font-size:11.5px;color:var(--dsw-alias-label-secondary);margin-top:2px}',
+      '.dsh-facechat-settings-input{height:28px;width:100%;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;outline:none}',
+      '.dsh-facechat-settings-input:focus{border-color:var(--dsw-alias-border-l2)}',
+      '.dsh-facechat-settings-textarea{width:100%;min-height:70px;padding:7px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;line-height:1.6;resize:vertical;outline:none}',
+      '.dsh-facechat-settings-textarea:focus{border-color:var(--dsw-alias-border-l2)}',
+      '.dsh-facechat-settings-error{margin:0;font-size:11.5px;color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}',
       '.dsh-facechat-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
       ...SPEAKER_TOKEN_CLASSES,
       '@media (max-width:980px){.dsh-facechat-sidebar{flex-basis:220px;width:220px}.dsh-facechat-transcript{padding:12px 16px 24px}.dsh-facechat-header{padding:10px 14px}.dsh-facechat-footer{padding:8px 14px}}',
@@ -3969,6 +4344,234 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function CloudSettingsDialog(props) {
+      const config = (props.cloudSnap && props.cloudSnap.config) || CLOUD_DEFAULT_CONFIG;
+      const [provider, setProvider] = React.useState(config.provider === 'volc' ? 'volc' : 'local');
+      const [apiKey, setApiKey] = React.useState('');
+      const [clearKey, setClearKey] = React.useState(false);
+      const [resourceId, setResourceId] = React.useState(config.volc.resourceId || 'volc.seedasr.sauc.duration');
+      const [language, setLanguage] = React.useState(config.volc.language || 'zh-CN');
+      const [hotwords, setHotwords] = React.useState((config.volc.hotwords || []).join('\n'));
+      const [codexModel, setCodexModel] = React.useState(config.codex.model || 'gpt-5.6-luna');
+      const [saving, setSaving] = React.useState(false);
+      const [error, setError] = React.useState('');
+      const zh = isChineseLocale(props.activeLocale);
+
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === 'Escape' || event.key === 'Esc') {
+            event.stopPropagation();
+            props.onClose();
+          }
+        };
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
+      }, [props]);
+
+      const save = async () => {
+        setSaving(true);
+        setError('');
+        const patch = {
+          provider,
+          resourceId,
+          language,
+          hotwords: hotwords.split(/[\n,，、]+/).map((word) => word.trim()).filter(Boolean),
+          codexModel,
+        };
+        if (clearKey) patch.clearVolcKey = true;
+        else if (apiKey.trim()) patch.volcApiKey = apiKey.trim();
+        const result = await props.cloud.save(patch);
+        setSaving(false);
+        if (!result || !result.ok) {
+          setError((result && result.error) || props.t('cloudRestartHint'));
+          return;
+        }
+        props.onSaved(result.config);
+        props.onClose();
+      };
+
+      const configured = config.volc && config.volc.configured;
+      const sourceLabel = config.volc && config.volc.source === 'env'
+        ? props.t('cloudSourceEnv')
+        : configured
+          ? props.t('cloudSourceStored')
+          : props.t('cloudSourceNone');
+
+      return h(
+        'div',
+        {
+          className: 'dsh-facechat-modal',
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-label': props.t('settingsTitle'),
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget) props.onClose();
+          },
+        },
+        h(
+          'div',
+          { className: 'dsh-facechat-modal-card dsh-facechat-settings-card' },
+          h(
+            'div',
+            { className: 'dsh-facechat-modal-head' },
+            h('span', { className: 'dsh-facechat-heading-mark' }, settingsGlyph(16)),
+            h('h2', { className: 'dsh-facechat-modal-title' }, props.t('settingsTitle')),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dsh-facechat-btn dsh-facechat-btn--ghost dsh-facechat-modal-close',
+                'aria-label': props.t('close'),
+                title: props.t('close'),
+                onClick: props.onClose,
+              },
+              '×',
+            ),
+          ),
+          h('p', { className: 'dsh-facechat-modal-hint' }, props.t('settingsHint')),
+          !props.cloudSnap.available
+            ? h(
+                'div',
+                { className: 'dsh-facechat-banner', 'data-tone': 'error' },
+                h('span', { className: 'dsh-facechat-banner-icon' }, alertGlyph(16)),
+                h(
+                  'div',
+                  { className: 'dsh-facechat-banner-body' },
+                  h('span', { className: 'dsh-facechat-banner-text' }, props.t('cloudRestartHint')),
+                  h(
+                    'div',
+                    { className: 'dsh-facechat-banner-actions' },
+                    h(
+                      'button',
+                      { type: 'button', className: 'dsh-facechat-btn', onClick: props.onRefresh },
+                      props.t('retryPrepare'),
+                    ),
+                  ),
+                ),
+              )
+            : null,
+          h(
+            'fieldset',
+            { className: 'dsh-facechat-settings-group' },
+            h('legend', null, props.t('backendLabel')),
+            h(
+              'label',
+              { className: 'dsh-facechat-settings-radio' },
+              h('input', {
+                type: 'radio',
+                name: 'facechat-backend',
+                checked: provider === 'local',
+                onChange: () => setProvider('local'),
+              }),
+              h('span', null, props.t('backendLocal')),
+            ),
+            h(
+              'label',
+              { className: 'dsh-facechat-settings-radio' },
+              h('input', {
+                type: 'radio',
+                name: 'facechat-backend',
+                checked: provider === 'volc',
+                onChange: () => setProvider('volc'),
+              }),
+              h('span', null, props.t('backendVolc')),
+            ),
+          ),
+          provider === 'volc'
+            ? h(
+                'fieldset',
+                { className: 'dsh-facechat-settings-group' },
+                h('legend', null, props.t('cloudAsr')),
+                h('p', { className: 'dsh-facechat-modal-hint' }, props.t('cloudPrivacy')),
+                h(
+                  'div',
+                  { className: 'dsh-facechat-settings-row' },
+                  h('span', null, props.t('volcKey')),
+                  h('span', { className: 'dsh-facechat-settings-badge' }, configured ? sourceLabel : props.t('cloudSourceNone')),
+                ),
+                h('input', {
+                  className: 'dsh-facechat-settings-input',
+                  type: 'password',
+                  value: apiKey,
+                  placeholder: configured ? props.t('volcKeyConfigured') : props.t('volcKeyPlaceholder'),
+                  autoComplete: 'off',
+                  onChange: (event) => setApiKey(event.target.value),
+                }),
+                h(
+                  'label',
+                  { className: 'dsh-facechat-settings-check' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: clearKey,
+                    onChange: (event) => setClearKey(event.target.checked),
+                  }),
+                  props.t('volcKeyClear'),
+                ),
+                h('label', { className: 'dsh-facechat-settings-label' }, props.t('volcLanguage')),
+                h(
+                  'select',
+                  {
+                    className: 'dsh-facechat-settings-input',
+                    value: language,
+                    onChange: (event) => setLanguage(event.target.value),
+                  },
+                  CLOUD_LANGUAGES.map((item) =>
+                    h('option', { key: item.id, value: item.id }, zh ? item.zh : item.en),
+                  ),
+                ),
+                h('label', { className: 'dsh-facechat-settings-label' }, props.t('volcResourceId')),
+                h('input', {
+                  className: 'dsh-facechat-settings-input',
+                  type: 'text',
+                  value: resourceId,
+                  spellCheck: false,
+                  onChange: (event) => setResourceId(event.target.value),
+                }),
+                h('label', { className: 'dsh-facechat-settings-label' }, props.t('volcHotwords')),
+                h('textarea', {
+                  className: 'dsh-facechat-settings-textarea',
+                  value: hotwords,
+                  spellCheck: false,
+                  placeholder: 'GitHub\nbenchmark\nDeepSeek\n冬阳',
+                  onChange: (event) => setHotwords(event.target.value),
+                }),
+                h('p', { className: 'dsh-facechat-modal-hint' }, props.t('volcHotwordsHint')),
+              )
+            : null,
+          h(
+            'fieldset',
+            { className: 'dsh-facechat-settings-group' },
+            h('legend', null, 'Codex'),
+            h('p', { className: 'dsh-facechat-modal-hint' }, props.t('codexPrivacy')),
+            h('label', { className: 'dsh-facechat-settings-label' }, props.t('codexModel')),
+            h('input', {
+              className: 'dsh-facechat-settings-input',
+              type: 'text',
+              value: codexModel,
+              spellCheck: false,
+              onChange: (event) => setCodexModel(event.target.value),
+            }),
+          ),
+          error ? h('p', { className: 'dsh-facechat-settings-error', role: 'alert' }, error) : null,
+          h(
+            'div',
+            { className: 'dsh-facechat-modal-actions' },
+            h('button', { type: 'button', className: 'dsh-facechat-btn', onClick: props.onClose }, props.t('close')),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dsh-facechat-btn dsh-facechat-btn--primary',
+                disabled: saving || !props.cloudSnap.available,
+                onClick: save,
+              },
+              saving ? props.t('settingsSaving') : props.t('settingsSave'),
+            ),
+          ),
+        ),
+      );
+    }
+
     function providerStatus(speechSnap) {
       const catalog = speechSnap && speechSnap.catalog ? speechSnap.catalog : null;
       const provider = catalog
@@ -4232,10 +4835,14 @@ window.__ModuleLoader__.load({
       const speechBridge = props.speech;
       const historyStore = props.history;
       const glossary = props.glossary;
+      const cloud = props.cloud;
 
       const [snap, setSnap] = React.useState(() => engine.getSnapshot());
       const [speechSnap, setSpeechSnap] = React.useState(() => speechBridge.getSnapshot());
       const [historySnap, setHistorySnap] = React.useState(() => historyStore.getSnapshot());
+      const [cloudSnap, setCloudSnap] = React.useState(() =>
+        cloud ? cloud.getSnapshot() : { available: false, loading: false, saving: false, error: null, config: null },
+      );
       const [, setLocaleRevision] = React.useState(0);
       const [now, setNow] = React.useState(Date.now());
       const [level, setLevel] = React.useState(0);
@@ -4248,7 +4855,10 @@ window.__ModuleLoader__.load({
       const [titleDraft, setTitleDraft] = React.useState(snap.title || '');
       const [contentView, setContentView] = React.useState('transcript');
       const [glossaryOpen, setGlossaryOpen] = React.useState(false);
+      const [settingsOpen, setSettingsOpen] = React.useState(false);
       const [languageTipDismissed, setLanguageTipDismissed] = React.useState(loadLanguageTipDismissed);
+      const [polishBusy, setPolishBusy] = React.useState(false);
+      const [polishNotice, setPolishNotice] = React.useState('');
 
       const titleTimer = React.useRef(null);
       const copiedTimer = React.useRef(null);
@@ -4265,6 +4875,10 @@ window.__ModuleLoader__.load({
       React.useEffect(() => engine.subscribe(() => setSnap(engine.getSnapshot())), [engine]);
       React.useEffect(() => speechBridge.subscribe(() => setSpeechSnap(speechBridge.getSnapshot())), [speechBridge]);
       React.useEffect(() => historyStore.subscribe(() => setHistorySnap(historyStore.getSnapshot())), [historyStore]);
+      React.useEffect(() => {
+        if (!cloud) return undefined;
+        return cloud.subscribe(() => setCloudSnap(cloud.getSnapshot()));
+      }, [cloud]);
       React.useEffect(() => {
         if (!localeFace || typeof localeFace.subscribe !== 'function') return undefined;
         return localeFace.subscribe(() => setLocaleRevision((value) => value + 1));
@@ -4338,19 +4952,31 @@ window.__ModuleLoader__.load({
       const status = providerStatus(speechSnap);
       const provider = status.provider;
       const preparation = status.preparation;
-      const canStart = !!(
+      const cloudConfig = (cloudSnap && cloudSnap.config) || CLOUD_DEFAULT_CONFIG;
+      const backend = cloudConfig.provider === 'volc' ? 'volc' : 'local';
+      const localReady = !!(
         speechSnap.available &&
         speechSnap.connected &&
         provider &&
         preparation &&
         ['ready', 'standby', 'waking'].indexOf(preparation.phase) >= 0
       );
+      const cloudReady = !!(backend === 'volc' && cloudSnap.available && cloudConfig.volc && cloudConfig.volc.configured);
+      const canStart = backend === 'volc' ? cloudReady : localReady;
 
       const recording = snap.phase === 'recording';
       const starting = snap.phase === 'starting';
       const stopping = snap.phase === 'stopping';
       const elapsed = recording ? Math.max(0, now - snap.startedAt) : snap.durationMs || 0;
       const canExport = lines.some((line) => line.text) && !starting && !stopping;
+      const canPolish = !!(
+        cloudSnap.available &&
+        !polishBusy &&
+        !recording &&
+        !starting &&
+        !stopping &&
+        lines.some((line) => line.text)
+      );
       const audioAvailable = !!(
         snap.audioUrl &&
         snap.audioSessionId &&
@@ -4359,6 +4985,7 @@ window.__ModuleLoader__.load({
         snap.view === 'review'
       );
       const showLanguageTip = !!(
+        backend === 'local' &&
         !recording &&
         !starting &&
         !stopping &&
@@ -4401,6 +5028,12 @@ window.__ModuleLoader__.load({
       };
       const changeLanguage = async (language) => {
         setActionError('');
+        if (backend === 'volc') {
+          if (!cloud) return;
+          const result = await cloud.save({ language });
+          if (!result.ok) setActionError(result.error || t('statusFailed'));
+          return;
+        }
         const result = await speechBridge.configure({ language });
         if (result && result.ok === false) {
           setActionError(result.error && result.error.message ? result.error.message : t('statusFailed'));
@@ -4488,6 +5121,54 @@ window.__ModuleLoader__.load({
       const useChineseRecognition = () => {
         dismissLanguageTip();
         void changeLanguage('zh');
+      };
+      const refreshCloud = () => {
+        if (cloud) void cloud.refresh();
+      };
+      const polishTranscript = async () => {
+        if (!cloud || !cloudSnap.available) {
+          setActionError(t('codexUnavailable'));
+          return;
+        }
+        const targets = engine.getPolishTargets();
+        if (!targets.length) {
+          setActionError(t('polishNoLines'));
+          return;
+        }
+        setPolishBusy(true);
+        setPolishNotice('');
+        setActionError('');
+        try {
+          const terms = glossary && typeof glossary.hotwords === 'function' ? glossary.hotwords() : [];
+          const language = backend === 'volc'
+            ? cloudConfig.volc.language
+            : isChineseLocale(activeLocale) ? 'zh-CN' : '';
+          const corrected = [];
+          const chunkSize = 30;
+          for (let offset = 0; offset < targets.length; offset += chunkSize) {
+            const slice = targets.slice(offset, offset + chunkSize);
+            const result = await cloud.polish({
+              lines: slice.map((target) => target.text),
+              terms,
+              language,
+            });
+            const polished = result && Array.isArray(result.lines) ? result.lines : null;
+            if (!polished || polished.length !== slice.length) {
+              throw new Error(t('polishFailed', { message: 'line-count-mismatch' }));
+            }
+            for (let index = 0; index < slice.length; index++) {
+              corrected.push({ id: slice[index].id, text: polished[index] });
+            }
+          }
+          if (!engine.applyPolishedTexts(corrected)) throw new Error(t('polishFailed', { message: 'apply-failed' }));
+          setPolishNotice(t('polishDone', { n: String(corrected.length) }));
+        } catch (error) {
+          setActionError(
+            error && error.message ? error.message : t('polishFailed', { message: String(error) }),
+          );
+        } finally {
+          setPolishBusy(false);
+        }
       };
 
       const statusPillTone = recording

@@ -54,6 +54,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 })
 
 export function defaultStateRoot(env = process.env, homedir = os.homedir) {
+  if (env.FACECHAT_STATE_DIR) return env.FACECHAT_STATE_DIR
   return path.join(env.DSH_HOME || path.join(homedir(), '.dsh'), 'plugin-data', 'facechat-recorder')
 }
 
