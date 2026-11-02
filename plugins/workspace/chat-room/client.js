@@ -21,7 +21,12 @@ window.__ModuleLoader__.load({
     const API = '/plugin/chat-room';
     const DEFAULT_RELAY = 'https://ntfy.sh';
     const MAX_TEXT = 2000;
-    const PLUGIN_ZIP = 'chat-room-1.12.1.tgz';
+    const PLUGIN_ZIP = 'chat-room-1.13.0.tgz';
+
+    /* An avatar is stored as a small square data URL: the picker crops and
+       shrinks whatever picture is chosen, so the saved state stays light. */
+    const AVATAR_PIXELS = 128;
+    const MAX_AVATAR_CHARS = 48 * 1024;
 
     /**
      * The stylesheet is injected once for the whole plugin, not by the panel:
@@ -45,7 +50,7 @@ window.__ModuleLoader__.load({
 
     /* The version of this front-end build. It is shown in the settings, so a
        stale page can be told apart from a current one at a glance. */
-    const CLIENT_BUILD = '1.12.1';
+    const CLIENT_BUILD = '1.13.0';
 
     function injectStyles() {
       if (typeof document === 'undefined') return;
@@ -166,6 +171,12 @@ window.__ModuleLoader__.load({
         updateDownloadFailed: '下载新版本失败',
         updateMismatch: '更新源的包名与当前插件不一致，已拒绝更新',
         myName: '我的昵称',
+        avatarTitle: '我的头像',
+        avatarHint: '选一张图片作为头像，会自动裁成方形并压缩；支持 PNG / JPEG / WebP。',
+        avatarPick: '选择图片',
+        avatarChange: '更换图片',
+        avatarRemove: '移除头像',
+        avatarLoadFailed: '这张图片读不出来，换一张试试',
         defaultRelay: '中继地址',
         relayHint: '双方要用同一个中继；改这里只影响以后发给别人的添加码。',
         notifyTitle: '系统通知',
@@ -286,6 +297,12 @@ window.__ModuleLoader__.load({
         updateDownloadFailed: 'The new version could not be downloaded',
         updateMismatch: 'The update source names a different package, so the update was refused',
         myName: 'My name',
+        avatarTitle: 'My avatar',
+        avatarHint: 'Pick a picture; it is cropped to a square and shrunk automatically (PNG / JPEG / WebP).',
+        avatarPick: 'Choose picture',
+        avatarChange: 'Change picture',
+        avatarRemove: 'Remove avatar',
+        avatarLoadFailed: 'That picture could not be read, please try another',
         defaultRelay: 'Relay',
         relayHint: 'Both sides must use the same relay. Changing it only affects codes you send later.',
         notifyTitle: 'System notifications',
@@ -860,6 +877,73 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Turns a chosen picture into a small square avatar data URL. The picture
+     * is center-cropped and drawn onto a canvas, so a 4000px photo becomes a
+     * light 128px JPEG that fits into one state update. Resolves with the data
+     * URL; rejects when the file cannot be read or decoded.
+     */
+    function readAvatarFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file || typeof file.type !== 'string' || file.type.indexOf('image/') !== 0) {
+          reject(new Error('not-an-image'));
+          return;
+        }
+        if (typeof FileReader !== 'function' || typeof Image !== 'function') {
+          reject(new Error('no-browser'));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('read-failed'));
+        reader.onload = () => {
+          const source = typeof reader.result === 'string' ? reader.result : '';
+          if (!source) {
+            reject(new Error('read-failed'));
+            return;
+          }
+          const image = new Image();
+          image.onerror = () => reject(new Error('decode-failed'));
+          image.onload = () => {
+            try {
+              const width = image.naturalWidth || image.width;
+              const height = image.naturalHeight || image.height;
+              if (!width || !height) {
+                reject(new Error('decode-failed'));
+                return;
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = AVATAR_PIXELS;
+              canvas.height = AVATAR_PIXELS;
+              const context = canvas.getContext('2d');
+              if (!context) {
+                reject(new Error('canvas-failed'));
+                return;
+              }
+              const scale = Math.max(AVATAR_PIXELS / width, AVATAR_PIXELS / height);
+              const drawWidth = Math.round(width * scale);
+              const drawHeight = Math.round(height * scale);
+              context.drawImage(
+                image,
+                Math.round((AVATAR_PIXELS - drawWidth) / 2),
+                Math.round((AVATAR_PIXELS - drawHeight) / 2),
+                drawWidth,
+                drawHeight,
+              );
+              let encoded = canvas.toDataURL('image/jpeg', 0.82);
+              // A very busy picture can still be large; one cheaper pass keeps
+              // every avatar inside the request body the Host accepts.
+              if (encoded.length > MAX_AVATAR_CHARS) encoded = canvas.toDataURL('image/jpeg', 0.6);
+              resolve(encoded);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          image.src = source;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /**
      * Keeps a floating menu inside the viewport: clamp its anchor so the menu
      * never runs off the right or bottom edge. Without a viewport (tests) the
      * anchor is used as is, only never below zero.
@@ -957,6 +1041,12 @@ window.__ModuleLoader__.load({
       '.dsh-msg-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}',
       ".dsh-msg-row[data-active='true']{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l1)}",
       '.dsh-msg-avatar{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-primary);font-size:14px;font-weight:600}',
+      '.dsh-msg-avatar--image{display:block;object-fit:cover;background:var(--dsw-alias-bg-layer-2)}',
+      '.dsh-msg-avatar--small{width:28px;height:28px;font-size:12px}',
+      '.dsh-msg-avatar--preview{width:56px;height:56px;font-size:20px}',
+      '.dsh-msg-avatar--card{width:44px;height:44px;font-size:16px}',
+      '.dsh-msg-avatar-editor{display:flex;align-items:center;gap:12px}',
+      '.dsh-msg-avatar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
       '.dsh-msg-row-body{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-width:0}',
       '.dsh-msg-row-top{display:flex;align-items:baseline;gap:8px}',
       '.dsh-msg-row-name{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;cursor:text}',
@@ -972,6 +1062,9 @@ window.__ModuleLoader__.load({
       '.dsh-msg-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--dsw-alias-state-error-primary);color:#fff;font-size:10.5px;font-weight:600;flex:0 0 auto}',
       '.dsh-msg-rail-foot{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:10px 16px;border-top:1px solid var(--dsw-alias-border-l1)}',
       '.dsh-msg-self{display:flex;flex-direction:column;min-width:0;flex:1 1 auto}',
+      '.dsh-msg-self-identity{display:flex;align-items:center;gap:8px;min-width:0}',
+      '.dsh-msg-self-text{display:flex;flex-direction:column;min-width:0;flex:1 1 auto}',
+      '.dsh-msg-self-avatar{flex:0 0 auto}',
       '.dsh-msg-self-name{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dsh-msg-self-hint{font-size:10.5px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.dsh-msg-main{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}',
@@ -1101,11 +1194,13 @@ window.__ModuleLoader__.load({
       const [settingsNick, setSettingsNick] = React.useState('');
       const [settingsRelay, setSettingsRelay] = React.useState(DEFAULT_RELAY);
       const [settingsNotify, setSettingsNotify] = React.useState(true);
+      const [settingsAvatar, setSettingsAvatar] = React.useState('');
       const [updateSpec, setUpdateSpec] = React.useState('');
       const [updateBusy, setUpdateBusy] = React.useState(false);
       const [updateNotice, setUpdateNotice] = React.useState('');
       const messageListRef = React.useRef(null);
       const menuRef = React.useRef(null);
+      const avatarInputRef = React.useRef(null);
       const copyTimer = React.useRef(null);
       const threadToken = React.useRef(0);
       const stateRef = React.useRef(null);
@@ -1668,17 +1763,45 @@ window.__ModuleLoader__.load({
           nick: name,
           relay: settingsRelay,
           notify: settingsNotify === true,
+          avatar: settingsAvatar,
         });
         if (result.ok) setOverlay(null);
         else setFormError(result.detail || t('loadError'));
+      };
+
+      // Picking a picture only fills the preview; the settings Save button
+      // stores it, so a change of mind costs nothing.
+      const handleAvatarFile = async (event) => {
+        const input = event && event.target;
+        const file =
+          input && input.files && input.files.length ? input.files[0] : null;
+        if (input) input.value = '';
+        if (!file) return;
+        setFormError('');
+        try {
+          setSettingsAvatar(await readAvatarFile(file));
+        } catch (err) {
+          setFormError(t('avatarLoadFailed'));
+        }
       };
 
       /* -------------------------------------------------------------- *
        * Render helpers
        * -------------------------------------------------------------- */
 
-      const renderAvatar = (contact) =>
-        h('span', { className: 'dsh-msg-avatar' }, initial(contact.name || ''));
+      const renderAvatar = (contact) => {
+        const avatar =
+          contact && contact.self && state && state.self ? state.self.avatar || '' : '';
+        if (avatar) {
+          return h('img', {
+            className: 'dsh-msg-avatar dsh-msg-avatar--image',
+            src: avatar,
+            alt: (contact && contact.name) || t('you'),
+            title: (contact && contact.name) || t('you'),
+          });
+        }
+        return h('span', { className: 'dsh-msg-avatar' }, initial(contact.name || ''));
+      };
 
       const renderOverlay = () => {
         if (!overlay) return null;
@@ -1818,6 +1941,18 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsh-msg-overlay-head' },
+                state && state.self.avatar
+                  ? h('img', {
+                      className: 'dsh-msg-avatar dsh-msg-avatar--image dsh-msg-avatar--card',
+                      src: state.self.avatar,
+                      alt: state.self.nick || t('you'),
+                      title: state.self.nick || t('you'),
+                    })
+                  : h(
+                      'span',
+                      { className: 'dsh-msg-avatar dsh-msg-avatar--card' },
+                      initial(state ? state.self.nick || '' : ''),
+                    ),
                 h(
                   'div',
                   null,
@@ -1975,6 +2110,60 @@ window.__ModuleLoader__.load({
                   },
                   closeGlyph(13),
                 ),
+              ),
+              h(
+                'div',
+                { className: 'dsh-msg-field' },
+                h('span', { className: 'dsh-msg-label' }, t('avatarTitle')),
+                h(
+                  'div',
+                  { className: 'dsh-msg-avatar-editor' },
+                  settingsAvatar
+                    ? h('img', {
+                        className: 'dsh-msg-avatar dsh-msg-avatar--image dsh-msg-avatar--preview',
+                        src: settingsAvatar,
+                        alt: t('avatarTitle'),
+                      })
+                    : h(
+                        'span',
+                        { className: 'dsh-msg-avatar dsh-msg-avatar--preview' },
+                        initial(settingsNick || ''),
+                      ),
+                  h(
+                    'div',
+                    { className: 'dsh-msg-avatar-actions' },
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-msg-btn',
+                        onClick: () => {
+                          if (avatarInputRef.current) avatarInputRef.current.click();
+                        },
+                      },
+                      settingsAvatar ? t('avatarChange') : t('avatarPick'),
+                    ),
+                    settingsAvatar
+                      ? h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-msg-btn dsh-msg-btn--ghost',
+                            onClick: () => setSettingsAvatar(''),
+                          },
+                          t('avatarRemove'),
+                        )
+                      : null,
+                    h('input', {
+                      ref: avatarInputRef,
+                      type: 'file',
+                      accept: 'image/png,image/jpeg,image/webp',
+                      style: { display: 'none' },
+                      onChange: (event) => void handleAvatarFile(event),
+                    }),
+                  ),
+                ),
+                h('span', { className: 'dsh-msg-small' }, t('avatarHint')),
               ),
               h(
                 'label',
@@ -2452,11 +2641,27 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsh-msg-self' },
-                h('span', { className: 'dsh-msg-self-name' }, state.self.nick || t('you')),
                 h(
-                  'span',
-                  { className: 'dsh-msg-self-hint' },
-                  state.self.unnamed ? t('setYourName') : statusLabel(status, t),
+                  'div',
+                  { className: 'dsh-msg-self-identity' },
+                  state.self.avatar
+                    ? h('img', {
+                        className: 'dsh-msg-avatar dsh-msg-avatar--image dsh-msg-avatar--small dsh-msg-self-avatar',
+                        src: state.self.avatar,
+                        alt: state.self.nick || t('you'),
+                        title: state.self.nick || t('you'),
+                      })
+                    : null,
+                  h(
+                    'div',
+                    { className: 'dsh-msg-self-text' },
+                    h('span', { className: 'dsh-msg-self-name' }, state.self.nick || t('you')),
+                    h(
+                      'span',
+                      { className: 'dsh-msg-self-hint' },
+                      state.self.unnamed ? t('setYourName') : statusLabel(status, t),
+                    ),
+                  ),
                 ),
               ),
               h(
@@ -2482,6 +2687,7 @@ window.__ModuleLoader__.load({
                     setSettingsNick(state.self.nick || '');
                     setSettingsRelay(state.relay || DEFAULT_RELAY);
                     setSettingsNotify(state.notify !== false);
+                    setSettingsAvatar(state.self.avatar || '');
                     setUpdateSpec((state.update && state.update.spec) || '');
                     setUpdateNotice('');
                     setFormError('');
@@ -3414,8 +3620,24 @@ window.__ModuleLoader__.load({
               { zh: '联系人版本记录', en: 'Contacts version log' },
               { zh: '消息插件版本记录', en: 'Messages plugin version log' },
             ],
-            version: '1.12.1',
+            version: '1.13.0',
             entries: [
+              {
+                version: '1.13.0',
+                at: '2026-11-02T15:25+08:00',
+                source: 'self-driven',
+                sourceName: 'DeepSeek Harness',
+                points: {
+                  zh: [
+                    '消息支持用户设置头像：「我的设置」里选一张图片，自动裁成方形并压缩后保存，侧边栏身份条、我的添加码和「我聊」里都会显示',
+                    '头像保存在本机插件数据里，不设置或移除头像时仍显示昵称首字',
+                  ],
+                  en: [
+                    'Messages now supports setting an avatar: pick a picture in My settings; it is cropped to a square and shrunk automatically, then shown in the sidebar identity row, the add-code card and "Chat with myself"',
+                    'The avatar is kept in this machine\'s plugin data; without one (or after removing it) the first character of the nickname is shown',
+                  ],
+                },
+              },
               {
                 version: '1.12.1',
                 at: '2026-11-01T23:05+08:00',

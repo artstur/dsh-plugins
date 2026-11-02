@@ -51,6 +51,7 @@ import {
   encodeContactCode,
   isValidRoom,
   normalizeName,
+  normalizeAvatar,
   normalizeImage,
   normalizeQuote,
   normalizeRelay,
@@ -602,6 +603,8 @@ class ContactsHost {
       version: 3,
       selfId,
       nick: defaultNick(selfId),
+      // A data URL chosen in "My settings"; empty means "show the initial".
+      avatar: '',
       relay: DEFAULT_RELAY,
       inbox: createRoom(),
       activeId: '',
@@ -760,6 +763,7 @@ class ContactsHost {
         ? defaultNick(typeof parsed.selfId === 'string' && parsed.selfId ? parsed.selfId : base.selfId)
         : normalizeName(parsed.nick),
       relay: normalizeRelay(parsed.relay) || DEFAULT_RELAY,
+      avatar: normalizeAvatar(parsed.avatar),
       inbox: isValidRoom(parsed.inbox) ? parsed.inbox : base.inbox,
       updateSpec: normalizeUpdateSpec(parsed.updateSpec),
       // The finished-update mark survives the restart that the swap causes.
@@ -1037,6 +1041,7 @@ class ContactsHost {
         nick: this.loaded.nick,
         unnamed: isPlaceholderName(this.loaded.nick),
         inbox: this.loaded.inbox,
+        avatar: this.loaded.avatar || '',
       },
       relay: this.loaded.relay,
       // Whether new messages should also pop a macOS notification.
@@ -1340,12 +1345,21 @@ class ContactsHost {
     };
   }
 
-  setSelf({ nick, relay, notify }) {
+  setSelf({ nick, relay, notify, avatar }) {
     const nextNick = normalizeName(nick);
     if (nick !== undefined && !nextNick) return { ok: false, error: 'invalid-nick' };
-    if (nextNick) this.loaded.nick = nextNick;
     const nextRelay = normalizeRelay(relay);
     if (relay !== undefined && !nextRelay) return { ok: false, error: 'invalid-relay' };
+    // An avatar is either unchanged (undefined), cleared (null or '') or a
+    // small picture data URL. Validate before touching anything, so a bad
+    // value never leaves the profile half-updated.
+    const hasAvatar = avatar !== undefined;
+    const nextAvatar = hasAvatar ? normalizeAvatar(avatar) : '';
+    if (hasAvatar && nextAvatar === '' && avatar !== null && avatar !== '') {
+      return { ok: false, error: 'invalid-avatar' };
+    }
+    if (nextNick) this.loaded.nick = nextNick;
+    if (hasAvatar) this.loaded.avatar = nextAvatar;
     if (nextRelay && nextRelay !== this.loaded.relay) {
       this.loaded.relay = nextRelay;
       this.loaded.inboxCursors = {};
@@ -2266,7 +2280,15 @@ class ContactsHost {
           json(400, { ok: false, error: 'bad-json' });
           return;
         }
-        json(200, this.setSelf({ nick: body.nick, relay: body.relay, notify: body.notify }));
+        json(
+          200,
+          this.setSelf({
+            nick: body.nick,
+            relay: body.relay,
+            notify: body.notify,
+            avatar: body.avatar,
+          }),
+        );
         return;
       }
       if (req.method === 'POST' && suffix === '/update/source') {

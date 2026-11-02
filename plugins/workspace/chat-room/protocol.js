@@ -38,6 +38,13 @@ export const MAX_NAME = 40;
 /** Longest quoted preview, in characters. */
 export const MAX_QUOTE_TEXT = 160;
 
+/** Longest avatar string accepted from the page: a small data URL that fits
+ *  inside one request body without making the saved state heavy. */
+export const MAX_AVATAR_CHARS = 48 * 1024;
+
+/** The picture types an avatar may be encoded as. */
+const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
 /** Largest picture that can be sent, in bytes. */
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -130,6 +137,20 @@ export function isValidRoom(value) {
 export function normalizeName(value) {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
+}
+
+/**
+ * Accepts only a small picture data URL as an avatar. Anything else (a remote
+ * URL, a script payload, an oversized image) becomes "no avatar", so a value
+ * from the page can never be stored or rendered blindly.
+ */
+export function normalizeAvatar(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_AVATAR_CHARS) return '';
+  const match = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(trimmed);
+  if (!match || !AVATAR_TYPES.includes(match[1])) return '';
+  return trimmed;
 }
 
 /** Creates a random room topic. Not secret-grade: it only has to be unique. */
@@ -227,7 +248,7 @@ export function encodeContactCode({ relay, room, name, update }) {
 }
 
 /** The version this build reports. */
-export const PLUGIN_VERSION = '1.12.1';
+export const PLUGIN_VERSION = '1.13.0';
 
 /** The name the plugin is published under. */
 export const PUBLISHED_PACKAGE_NAME = 'dsh-chat-room';

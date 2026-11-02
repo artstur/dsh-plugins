@@ -26,6 +26,8 @@ import {
   encodeContactCode,
   encodeRoomCode,
   isValidRoom,
+  MAX_AVATAR_CHARS,
+  normalizeAvatar,
   normalizeName,
   normalizeRelay,
   parseEnvelope,
@@ -357,4 +359,24 @@ test('a picture may travel without a caption', () => {
   assert.equal(normalizeImage({ type: 'text/html' }), null);
   assert.equal(normalizeImage({ type: 'image/png', size: -5 }).size, 0);
   assert.equal(parseEnvelope(JSON.stringify({ v: 1, id: 'x', text: '' })), null);
+});
+
+test('an avatar only passes when it is a small picture data URL', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  assert.equal(normalizeAvatar(png), png);
+  assert.equal(normalizeAvatar('  ' + png + '  '), png);
+  const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+  assert.equal(normalizeAvatar(jpeg), jpeg);
+  // Nothing else is a stored avatar: empty clears it, anything exotic is refused.
+  assert.equal(normalizeAvatar(''), '');
+  assert.equal(normalizeAvatar(null), '');
+  assert.equal(normalizeAvatar(7), '');
+  assert.equal(normalizeAvatar('https://example.test/avatar.png'), '');
+  assert.equal(normalizeAvatar('javascript:alert(1)'), '');
+  assert.equal(normalizeAvatar('data:text/html;base64,PHNjcmlwdD4='), '');
+  assert.equal(normalizeAvatar('data:image/gif;base64,R0lGODlhAQABAAAAACw='), '');
+  assert.equal(
+    normalizeAvatar('data:image/png;base64,' + 'A'.repeat(MAX_AVATAR_CHARS)),
+    '',
+  );
 });
