@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     const MAX_SHARE_CODE_LENGTH = 5600000;
     const SHARE_CODE_PREFIX = 'DSHNOTE1:';
 
-    const VERSION = '1.15.2';
+    const VERSION = '1.16.0';
     const NOTES_PLUGIN_ID = '@local/notes-panel';
     const PLUGIN_LOG_STORAGE_KEY = 'dsh.notes.plugin-logs.v1';
     const PLUGIN_LOG_SYSTEM_PREFIX = 'plugin-version-log:';
@@ -50,10 +50,148 @@ window.__ModuleLoader__.load({
     const MANAGED_NOTES_STORAGE_KEY = 'dsh.notes.managed-notes.v1';
     const MANAGED_NOTE_SYSTEM_PREFIX = 'managed-note:';
 
+    function ensureWeaveStorageMirror(prefix) {
+      if (
+        typeof window === 'undefined' ||
+        !window.localStorage ||
+        typeof window.Storage !== 'function' ||
+        typeof window.fetch !== 'function' ||
+        typeof window.addEventListener !== 'function'
+      ) return () => undefined;
+      const existing = window.__weaveStorageMirror;
+      if (existing && typeof existing.register === 'function') return existing.register(prefix);
+      const endpoint = 'http://127.0.0.1:4178/__weave/storage';
+      const prefixes = new Set();
+      const known = new Set();
+      const originalSet = window.Storage.prototype.setItem;
+      const originalRemove = window.Storage.prototype.removeItem;
+      const originalClear = window.Storage.prototype.clear;
+      let revision = 0;
+      let applying = false;
+      let ready = false;
+
+      const allowed = (key) =>
+        typeof key === 'string' && Array.from(prefixes).some((item) => key.indexOf(item) === 0);
+      const send = (payload) =>
+        fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(() => undefined);
+      const announce = (key, value) =>
+        window.dispatchEvent(new CustomEvent('weave-storage-sync', { detail: { key, value } }));
+
+      window.Storage.prototype.setItem = function setMirroredItem(key, value) {
+        const name = String(key);
+        const text = String(value);
+        const before = this === window.localStorage ? this.getItem(name) : null;
+        const result = originalSet.call(this, name, text);
+        if (this === window.localStorage && ready && !applying && allowed(name) && before !== text) {
+          void send({ op: 'set', key: name, value: text });
+        }
+        return result;
+      };
+      window.Storage.prototype.removeItem = function removeMirroredItem(key) {
+        const name = String(key);
+        const had = this === window.localStorage && this.getItem(name) !== null;
+        const result = originalRemove.call(this, name);
+        if (this === window.localStorage && ready && !applying && allowed(name) && had) {
+          void send({ op: 'remove', key: name });
+        }
+        return result;
+      };
+      window.Storage.prototype.clear = function clearMirroredItems() {
+        const local = this === window.localStorage;
+        const result = originalClear.call(this);
+        if (local && ready && !applying) void send({ op: 'clear' });
+        return result;
+      };
+
+      async function sync() {
+        try {
+          const response = await fetch(endpoint, { cache: 'no-store' });
+          if (!response.ok) return;
+          const snapshot = await response.json();
+          if (!snapshot || !snapshot.values || snapshot.revision === revision) return;
+          revision = snapshot.revision;
+          const remote = snapshot.values;
+          const localOnly = [];
+          if (!ready) {
+            for (let index = 0; index < window.localStorage.length; index += 1) {
+              const key = window.localStorage.key(index);
+              if (allowed(key) && !Object.prototype.hasOwnProperty.call(remote, key)) {
+                localOnly.push([key, window.localStorage.getItem(key) || '']);
+              }
+            }
+          }
+          applying = true;
+          try {
+            for (const [key, value] of Object.entries(remote)) {
+              if (!allowed(key)) continue;
+              known.add(key);
+              if (window.localStorage.getItem(key) !== value) {
+                originalSet.call(window.localStorage, key, value);
+                announce(key, value);
+              }
+            }
+            if (ready) {
+              for (const key of Array.from(known)) {
+                if (allowed(key) && !Object.prototype.hasOwnProperty.call(remote, key)) {
+                  known.delete(key);
+                  if (window.localStorage.getItem(key) !== null) {
+                    originalRemove.call(window.localStorage, key);
+                    announce(key, null);
+                  }
+                }
+              }
+            }
+          } finally {
+            applying = false;
+          }
+          ready = true;
+          for (const [key, value] of localOnly) void send({ op: 'set', key, value });
+        } catch (err) {
+          /* The desktop UI remains usable while the local mirror is offline. */
+        }
+      }
+
+      const service = {
+        register(value) {
+          if (typeof value === 'string' && value) prefixes.add(value);
+          revision = 0;
+          void sync();
+          return () => undefined;
+        },
+        sync,
+      };
+      window.__weaveStorageMirror = service;
+      window.setInterval(sync, 1000);
+      return service.register(prefix);
+    }
+
     // The plugin maintains a changelog note in its own store. To log a future
     // release, prepend its entry here and bump package.json; the entry is
     // appended to the note the next time the Client module loads.
     const CHANGELOG = [
+      {
+        version: '1.16.0',
+        at: '2026-11-05T22:13+08:00',
+        source: 'external',
+        sourceName: 'Codex',
+        points: {
+          zh: [
+            '新增：笔记存储与独立 weave 演示入口双向镜像，任一入口的新增、编辑和删除都会写入同一份持久化状态',
+            '新增：远端存储变化实时推送到已打开的笔记面板，服务或页面重启后继续从最新版本恢复',
+            '保护：镜像服务离线时不阻塞笔记本身，恢复连接后自动补齐本地新增数据',
+          ],
+          en: [
+            'Added two-way Notes storage mirroring with the standalone weave demo; creates, edits and removals from either entry share one durable state',
+            'Added live delivery of remote storage changes into an open Notes panel, with the latest version restored after service or page restarts',
+            'Resilience: Notes remains usable while the mirror is offline and uploads locally created data after reconnection',
+          ],
+        },
+      },
       {
         version: '1.15.2',
         at: '2026-10-29T23:52+08:00',
@@ -1107,6 +1245,14 @@ window.__ModuleLoader__.load({
             /* one faulty view must not stop the others */
           }
         }
+      }
+
+      if (typeof window.addEventListener === 'function') {
+        window.addEventListener('weave-storage-sync', (event) => {
+          if (!event || !event.detail || event.detail.key !== STORAGE_KEY) return;
+          state = loadState();
+          emit();
+        });
       }
 
       function persistNow() {
@@ -5125,6 +5271,7 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'locale'],
       apply(ctx) {
         const t = ctx.locale.bind(NS);
+        ctx.effect(() => ensureWeaveStorageMirror('dsh.notes.'), 'notes-storage-mirror');
 
         // Dictionaries for every language the catalog knows about, plus the
         // tags this bundle ships, so a late-loaded language still resolves.
