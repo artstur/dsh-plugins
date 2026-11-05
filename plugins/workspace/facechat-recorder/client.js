@@ -42,6 +42,7 @@ window.__ModuleLoader__.load({
       const endpoint = 'http://127.0.0.1:4178/__weave/storage';
       const prefixes = new Set();
       const known = new Set();
+      const pending = new Map();
       const originalSet = window.Storage.prototype.setItem;
       const originalRemove = window.Storage.prototype.removeItem;
       const originalClear = window.Storage.prototype.clear;
@@ -66,8 +67,9 @@ window.__ModuleLoader__.load({
         const text = String(value);
         const before = this === window.localStorage ? this.getItem(name) : null;
         const result = originalSet.call(this, name, text);
-        if (this === window.localStorage && ready && !applying && allowed(name) && before !== text) {
-          void send({ op: 'set', key: name, value: text });
+        if (this === window.localStorage && !applying && allowed(name) && before !== text) {
+          if (ready) void send({ op: 'set', key: name, value: text });
+          else pending.set(name, { op: 'set', key: name, value: text });
         }
         return result;
       };
@@ -75,15 +77,19 @@ window.__ModuleLoader__.load({
         const name = String(key);
         const had = this === window.localStorage && this.getItem(name) !== null;
         const result = originalRemove.call(this, name);
-        if (this === window.localStorage && ready && !applying && allowed(name) && had) {
-          void send({ op: 'remove', key: name });
+        if (this === window.localStorage && !applying && allowed(name) && had) {
+          if (ready) void send({ op: 'remove', key: name });
+          else pending.set(name, { op: 'remove', key: name });
         }
         return result;
       };
       window.Storage.prototype.clear = function clearMirroredItems() {
         const local = this === window.localStorage;
         const result = originalClear.call(this);
-        if (local && ready && !applying) void send({ op: 'clear' });
+        if (local && !applying) {
+          if (ready) void send({ op: 'clear' });
+          else pending.set('*', { op: 'clear' });
+        }
         return result;
       };
 
@@ -109,6 +115,7 @@ window.__ModuleLoader__.load({
             for (const [key, value] of Object.entries(remote)) {
               if (!allowed(key)) continue;
               known.add(key);
+              if (!ready && pending.has(key)) continue;
               if (window.localStorage.getItem(key) !== value) {
                 originalSet.call(window.localStorage, key, value);
                 announce(key, value);
@@ -130,6 +137,8 @@ window.__ModuleLoader__.load({
           }
           ready = true;
           for (const [key, value] of localOnly) void send({ op: 'set', key, value });
+          for (const payload of pending.values()) void send(payload);
+          pending.clear();
         } catch (err) {
           /* Recording continues even when the local mirror is offline. */
         }
@@ -5914,7 +5923,8 @@ window.__ModuleLoader__.load({
       inject: ['remote', 'slots', 'locale'],
       apply(ctx) {
         const t = ctx.locale.bind(NS);
-        ctx.effect(() => ensureWeaveStorageMirror('dsh.facechat.'), 'facechat-storage-mirror');
+        const disposeStorageMirror = ensureWeaveStorageMirror('dsh.facechat.');
+        ctx.effect(() => disposeStorageMirror, 'facechat-storage-mirror');
 
         // Dictionaries for every locale the catalog knows about, plus the tags
         // this bundle ships, so a late-loaded language still resolves.
