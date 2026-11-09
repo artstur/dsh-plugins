@@ -14,7 +14,7 @@
 
 内容由各自的插件保存。[端侧资源接口](plugins/context/resource-api)提供统一的 `search` / `read` 协议；输入框中的 [`#` 引用](plugins/context/knowledge-context-reference)可以选择笔记、面聊或消息，在发送时读取最新内容，交给 Agent 回答。用户仍能在对话里看到清楚的引用对象。
 
-## Aha moment：消息成为产品的迭代入口
+## 消息成为产品的迭代入口
 
 我或联系人在「消息」里提出一条关于产品的意见，例如“点击图片无法放大捏”，[自驱动迭代](plugins/agent/self-iteration)会扫描消息、识别相关反馈并生成需求。开启自动迭代时，它会创建 DSH 创造模式会话，让 Agent 判断能否实现、修改插件并验证；迭代结果写回笔记中的需求汇总和对应插件的版本记录。
 
