@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     const MAX_SHARE_CODE_LENGTH = 5600000;
     const SHARE_CODE_PREFIX = 'DSHNOTE1:';
 
-    const VERSION = '1.16.0';
+    const VERSION = '1.16.1';
     const NOTES_PLUGIN_ID = '@local/notes-panel';
     const PLUGIN_LOG_STORAGE_KEY = 'dsh.notes.plugin-logs.v1';
     const PLUGIN_LOG_SYSTEM_PREFIX = 'plugin-version-log:';
@@ -50,139 +50,183 @@ window.__ModuleLoader__.load({
     const MANAGED_NOTES_STORAGE_KEY = 'dsh.notes.managed-notes.v1';
     const MANAGED_NOTE_SYSTEM_PREFIX = 'managed-note:';
 
-    function ensureWeaveStorageMirror(prefix) {
-      if (
-        typeof window === 'undefined' ||
-        !window.localStorage ||
-        typeof window.Storage !== 'function' ||
-        typeof window.fetch !== 'function' ||
-        typeof window.addEventListener !== 'function'
-      ) return () => undefined;
+    function installStorageMirror(prefix, endpoint = 'http://127.0.0.1:4178/__weave/storage', initialSnapshot) {
+      if (typeof window === 'undefined' || !window.localStorage || !window.Storage || !window.fetch ||
+          typeof window.addEventListener !== 'function') return () => {};
       const existing = window.__weaveStorageMirror;
-      if (existing && typeof existing.register === 'function') return existing.register(prefix);
-      const endpoint = 'http://127.0.0.1:4178/__weave/storage';
-      const prefixes = new Set();
-      const known = new Set();
+      if (existing && typeof existing.register === 'function') return existing.register(prefix, initialSnapshot);
+
+      const storage = window.localStorage;
+      const proto = window.Storage.prototype;
+      const set = proto.setItem, remove = proto.removeItem, clear = proto.clear;
+      const notebookKey = 'dsh.notes.v1';
+      const journal = 'weave.mirror.outbox.v2';
       const pending = new Map();
-      const originalSet = window.Storage.prototype.setItem;
-      const originalRemove = window.Storage.prototype.removeItem;
-      const originalClear = window.Storage.prototype.clear;
-      let revision = 0;
-      let applying = false;
-      let ready = false;
+      const prefixes = new Set(), freshPrefixes = new Set(), known = new Set();
+      let revision = null, running = false;
+      const matches = (key, set) => Array.from(set).some((p) => key.startsWith(p));
 
-      const allowed = (key) =>
-        typeof key === 'string' && Array.from(prefixes).some((item) => key.indexOf(item) === 0);
-      const send = (payload) =>
-        fetch(endpoint, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-          keepalive: true,
-        }).catch(() => undefined);
-      const announce = (key, value) =>
+      // Keep the pre-edit notebook for three-way merges across a page reload.
+      // Store only the changed span; the full current notebook is already on disk.
+      function basePatch(base, value) {
+        if (base == null) return base;
+        const current = value || '';
+        let left = 0, right = 0;
+        const length = Math.min(base.length, current.length);
+        while (left < length && base[left] === current[left]) left++;
+        while (right < length - left && base[base.length - 1 - right] === current[current.length - 1 - right]) right++;
+        return [left, right, base.slice(left, base.length - right), current.length];
+      }
+      function restoreBase(patch, value) {
+        if (!Array.isArray(patch)) return patch;
+        const current = value || '';
+        const [left, right, text, length] = patch;
+        if (current.length !== length) return undefined;
+        return current.slice(0, left) + text + current.slice(current.length - right);
+      }
+      function saveJournal() {
+        if (!pending.size) { remove.call(storage, journal); return; }
+        const rows = Array.from(pending, ([key, change]) => {
+          const row = { key };
+          if (key === notebookKey) row.base = basePatch(change.base, storage.getItem(key));
+          return row;
+        });
+        try { set.call(storage, journal, JSON.stringify(rows)); }
+        catch { set.call(storage, journal, JSON.stringify(rows.map(({ key }) => ({ key })))); }
+      }
+      try {
+        for (const row of JSON.parse(storage.getItem(journal) || '[]')) {
+          if (typeof row.key === 'string') pending.set(row.key, { base: restoreBase(row.base, storage.getItem(row.key)) });
+        }
+      } catch { /* An unreadable journal does not prevent access to local storage. */ }
+
+      function queue(key, before) {
+        const base = pending.has(key) ? pending.get(key).base : before;
+        pending.set(key, { base });
+        saveJournal();
+      }
+      proto.setItem = function (key, value) {
+        const name = String(key), text = String(value);
+        const before = this === storage ? storage.getItem(name) : null;
+        const result = set.call(this, name, text);
+        if (this === storage && before !== text && matches(name, prefixes)) { queue(name, before); void sync(); }
+        return result;
+      };
+      proto.removeItem = function (key) {
+        const name = String(key);
+        const before = this === storage ? storage.getItem(name) : null;
+        const result = remove.call(this, name);
+        if (this === storage && before !== null && matches(name, prefixes)) { queue(name, before); void sync(); }
+        return result;
+      };
+      proto.clear = function () {
+        if (this !== storage) return clear.call(this);
+        const removed = [];
+        for (let i = 0; i < storage.length; i++) {
+          const key = storage.key(i);
+          if (matches(key, prefixes)) removed.push([key, storage.getItem(key)]);
+        }
+        const result = clear.call(this);
+        for (const [key, before] of removed) queue(key, before);
+        if (pending.size) { saveJournal(); void sync(); }
+        return result;
+      };
+
+      function applyValue(key, value) {
+        if (value === storage.getItem(key)) return;
+        if (value === null) remove.call(storage, key);
+        else set.call(storage, key, value);
         window.dispatchEvent(new CustomEvent('weave-storage-sync', { detail: { key, value } }));
-
-      window.Storage.prototype.setItem = function setMirroredItem(key, value) {
-        const name = String(key);
-        const text = String(value);
-        const before = this === window.localStorage ? this.getItem(name) : null;
-        const result = originalSet.call(this, name, text);
-        if (this === window.localStorage && !applying && allowed(name) && before !== text) {
-          if (ready) void send({ op: 'set', key: name, value: text });
-          else pending.set(name, { op: 'set', key: name, value: text });
+      }
+      function receive(snapshot) {
+        if (!snapshot || !snapshot.values || !Number.isFinite(snapshot.revision)) return;
+        if (snapshot.revision === revision && !freshPrefixes.size) return;
+        const values = snapshot.values;
+        for (let i = 0; i < storage.length && freshPrefixes.size; i++) {
+          const key = storage.key(i);
+          if (matches(key, freshPrefixes) && !Object.hasOwn(values, key) && !pending.has(key)) queue(key, null);
         }
-        return result;
-      };
-      window.Storage.prototype.removeItem = function removeMirroredItem(key) {
-        const name = String(key);
-        const had = this === window.localStorage && this.getItem(name) !== null;
-        const result = originalRemove.call(this, name);
-        if (this === window.localStorage && !applying && allowed(name) && had) {
-          if (ready) void send({ op: 'remove', key: name });
-          else pending.set(name, { op: 'remove', key: name });
+        freshPrefixes.clear();
+        for (const [key, value] of Object.entries(values)) {
+          if (!matches(key, prefixes)) continue;
+          known.add(key);
+          if (!pending.has(key)) applyValue(key, value);
         }
-        return result;
-      };
-      window.Storage.prototype.clear = function clearMirroredItems() {
-        const local = this === window.localStorage;
-        const result = originalClear.call(this);
-        if (local && !applying) {
-          if (ready) void send({ op: 'clear' });
-          else pending.set('*', { op: 'clear' });
+        for (const key of known) {
+          if (!Object.hasOwn(values, key) && !pending.has(key)) { known.delete(key); applyValue(key, null); }
         }
-        return result;
-      };
-
-      async function sync() {
-        try {
-          const response = await fetch(endpoint, { cache: 'no-store' });
-          if (!response.ok) return;
-          const snapshot = await response.json();
-          if (!snapshot || !snapshot.values || snapshot.revision === revision) return;
-          revision = snapshot.revision;
-          const remote = snapshot.values;
-          const localOnly = [];
-          if (!ready) {
-            for (let index = 0; index < window.localStorage.length; index += 1) {
-              const key = window.localStorage.key(index);
-              if (allowed(key) && !Object.prototype.hasOwnProperty.call(remote, key)) {
-                localOnly.push([key, window.localStorage.getItem(key) || '']);
-              }
-            }
-          }
-          applying = true;
-          try {
-            for (const [key, value] of Object.entries(remote)) {
-              if (!allowed(key)) continue;
-              known.add(key);
-              if (!ready && pending.has(key)) continue;
-              if (window.localStorage.getItem(key) !== value) {
-                originalSet.call(window.localStorage, key, value);
-                announce(key, value);
-              }
-            }
-            if (ready) {
-              for (const key of Array.from(known)) {
-                if (allowed(key) && !Object.prototype.hasOwnProperty.call(remote, key)) {
-                  known.delete(key);
-                  if (window.localStorage.getItem(key) !== null) {
-                    originalRemove.call(window.localStorage, key);
-                    announce(key, null);
-                  }
-                }
-              }
-            }
-          } finally {
-            applying = false;
-          }
-          ready = true;
-          for (const [key, value] of localOnly) void send({ op: 'set', key, value });
-          for (const payload of pending.values()) void send(payload);
-          pending.clear();
-        } catch (err) {
-          /* The desktop UI remains usable while the local mirror is offline. */
-        }
+        revision = snapshot.revision;
       }
 
-      const service = {
-        register(value) {
-          if (typeof value === 'string' && value) prefixes.add(value);
-          revision = 0;
-          void sync();
-          return () => undefined;
-        },
-        sync,
-      };
-      window.__weaveStorageMirror = service;
+      async function upload() {
+        for (;;) {
+          const entry = Array.from(pending).find(([key, change]) =>
+            matches(key, prefixes) && (change.blocked === undefined || change.blocked !== revision));
+          if (!entry) return;
+          const [key, change] = entry;
+          const value = storage.getItem(key);
+          const payload = value === null ? { op: 'remove', key } : { op: 'set', key, value };
+          if (key === notebookKey && change.base !== undefined) payload.baseValue = change.base;
+          // keepalive requests share a 64 KiB quota. The journal handles reloads.
+          const response = await window.fetch(endpoint, {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          if (response.status === 409) {
+            // Keep the local draft. Retry after new input or a new remote revision.
+            change.blocked = revision;
+            continue;
+          }
+          if (!response.ok || !result.ok) throw new Error('Storage mirror unavailable');
+          if (pending.get(key) === change) {
+            pending.delete(key);
+            if (key === notebookKey && Object.hasOwn(result, 'value')) applyValue(key, result.value);
+          } else {
+            // The next edit was based on the local value sent, not on a remote merge.
+            pending.get(key).base = value;
+          }
+          saveJournal();
+        }
+      }
+      async function sync() {
+        if (running) return;
+        running = true;
+        try {
+          if (revision !== null) await upload();
+          const response = await window.fetch(endpoint, { cache: 'no-store' });
+          if (!response.ok) return;
+          receive(await response.json());
+          if (revision !== null) await upload();
+        } catch { /* Retain the journal and retry when the mirror is reachable. */ }
+        finally { running = false; }
+      }
+      function register(value, firstSnapshot) {
+        if (typeof value === 'string' && value && !prefixes.has(value)) {
+          prefixes.add(value); freshPrefixes.add(value);
+          if (firstSnapshot) receive(firstSnapshot);
+        }
+        void sync();
+        return () => {};
+      }
+      window.__weaveStorageMirror = { register, sync };
       window.setInterval(sync, 1000);
-      return service.register(prefix);
+      return register(prefix, initialSnapshot);
     }
 
     // The plugin maintains a changelog note in its own store. To log a future
     // release, prepend its entry here and bump package.json; the entry is
     // appended to the note the next time the Client module loads.
     const CHANGELOG = [
+      {
+        version: '1.16.1',
+        at: '2026-11-11T20:02+08:00',
+        source: 'external',
+        sourceName: 'Codex',
+        points: {
+          zh: ['修复超过 64 KiB 的本机同步。页面重开或短暂断线后会补传待保存的修改；同时编辑产生冲突时会保留本机草稿。'],
+          en: ['Fixed local sync for edits larger than 64 KiB. Pending changes retry after a reload or reconnection, and overlapping edits retain the local draft.'],
+        },
+      },
       {
         version: '1.16.0',
         at: '2026-11-05T22:13+08:00',
@@ -5280,7 +5324,7 @@ window.__ModuleLoader__.load({
       inject: ['slots', 'locale'],
       apply(ctx) {
         const t = ctx.locale.bind(NS);
-        const disposeStorageMirror = ensureWeaveStorageMirror('dsh.notes.');
+        const disposeStorageMirror = installStorageMirror('dsh.notes.');
         ctx.effect(() => disposeStorageMirror, 'notes-storage-mirror');
 
         // Dictionaries for every language the catalog knows about, plus the

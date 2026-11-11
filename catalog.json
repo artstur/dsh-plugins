@@ -7,7 +7,7 @@
       "path": "plugins/workspace/notes-panel",
       "group": "workspace",
       "name": "@local/notes-panel",
-      "version": "1.16.0",
+      "version": "1.16.1",
       "description": "Harness Web UI 笔记面板：直接编辑渲染后的 Markdown，支持表格、图片、自动保存、插件版本日志和版本化分享快照。"
     },
     {
@@ -15,7 +15,7 @@
       "path": "plugins/workspace/facechat-recorder",
       "group": "workspace",
       "name": "@local/facechat-recorder",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "description": "Face-to-face conversation recorder panel: near-real-time transcription with a local SenseVoice engine or Volcengine SeedASR, Codex CLI transcript polishing, automatic speaker separation, glossary correction, identity-aware summaries and Markdown export."
     },
     {
