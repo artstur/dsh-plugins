@@ -31,6 +31,7 @@ async function loadShareApi() {
   source = source.replace(
     seam,
     `    window.__dshNotesShareTest = {
+      hasAlongReleaseSync,
       createSharePayload,
       encodeSharePayload,
       createShareCode,
@@ -147,4 +148,19 @@ test('parser rejects malformed and unsupported sharing codes', async () => {
     () => api.parseShareCode(unsupported),
     (error) => error && error.code === 'unsupported',
   );
+});
+
+test('only the bound Along original with its release table is shown as release-synced', async () => {
+  const { api } = await loadShareApi();
+  const id = '6c3ddf90-c52c-4244-83e4-85ebb3c3c105';
+  const table = '| 北京时间 | 版本与变化 | 发布与验收 | 来源 |';
+  const original = { id, title: 'Along', body: '## 后续发版\n\n' + table, images: [] };
+  assert.equal(api.hasAlongReleaseSync(original), true);
+  assert.equal(api.hasAlongReleaseSync({ ...original, body: '## 后续发版\n## 附录\n' + table }), false);
+  const payload = api.createSharePayload(original, 'Sender');
+  const store = api.createNotesStore();
+  store.importSharedNote(payload);
+  const copy = store.getSnapshot().notes[0];
+  assert.equal(copy.sharedFrom.sourceNoteId, original.id);
+  assert.equal(api.hasAlongReleaseSync(copy), false);
 });

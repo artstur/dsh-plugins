@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     const MAX_SHARE_CODE_LENGTH = 5600000;
     const SHARE_CODE_PREFIX = 'DSHNOTE1:';
 
-    const VERSION = '1.16.1';
+    const VERSION = '1.16.2';
     const NOTES_PLUGIN_ID = '@local/notes-panel';
     const PLUGIN_LOG_STORAGE_KEY = 'dsh.notes.plugin-logs.v1';
     const PLUGIN_LOG_SYSTEM_PREFIX = 'plugin-version-log:';
@@ -217,6 +217,16 @@ window.__ModuleLoader__.load({
     // release, prepend its entry here and bump package.json; the entry is
     // appended to the note the next time the Client module loads.
     const CHANGELOG = [
+      {
+        version: '1.16.2',
+        at: '2026-11-11T20:07+08:00',
+        source: 'external',
+        sourceName: 'Codex',
+        points: {
+          zh: ['Along 项目笔记现在显示发版台账和 GitHub 的自动同步来源。'],
+          en: ['The Along project note now shows its release ledger and GitHub sync source.'],
+        },
+      },
       {
         version: '1.16.1',
         at: '2026-11-11T20:02+08:00',
@@ -677,6 +687,8 @@ window.__ModuleLoader__.load({
         invalidShareCode: 'This is not a valid DSH note share code',
         unsupportedShareCode: 'This share code uses an unsupported version',
         shareCodeTooLarge: 'This share code is too large to import',
+        releaseSync: 'Release sync',
+        releaseSyncSource: 'Automatically updated from the Along release ledger and GitHub',
         importedShare: 'Shared snapshot',
         importedFrom: 'From {name}',
         importedAnonymous: 'Imported shared snapshot',
@@ -759,6 +771,8 @@ window.__ModuleLoader__.load({
         invalidShareCode: '这不是有效的 DSH 笔记分享码',
         unsupportedShareCode: '该分享码版本暂不支持',
         shareCodeTooLarge: '这份分享内容过大，无法导入',
+        releaseSync: '发版同步',
+        releaseSyncSource: '自动同步 Along 发版台账和 GitHub 的更新',
         importedShare: '分享快照',
         importedFrom: '来自 {name}',
         importedAnonymous: '来自匿名分享',
@@ -794,6 +808,17 @@ window.__ModuleLoader__.load({
         height: Number.isFinite(raw.height) ? raw.height : 0,
         addedAt: Number.isFinite(raw.addedAt) ? raw.addedAt : Date.now(),
       };
+    }
+
+    function hasAlongReleaseSync(note) {
+      // Imports get a new ID. Only the locally bound original receives release updates.
+      if (note.id !== '6c3ddf90-c52c-4244-83e4-85ebb3c3c105' || typeof note.body !== 'string') return false;
+      const header = '| 北京时间 | 版本与变化 | 发布与验收 | 来源 |';
+      const sections = note.body.replace(/\r\n/g, '\n').split(/^##[ \t]+/m);
+      return sections.slice(1).some((section) => {
+        const lines = section.split('\n');
+        return lines[0].trim() === '后续发版' && lines.includes(header);
+      });
     }
 
     function normalizeSharedFrom(raw) {
@@ -5081,7 +5106,8 @@ window.__ModuleLoader__.load({
                       formatWhen(note.updatedAt, formatters, t) +
                         (note.images.length ? ' · ' + note.images.length + ' ' + t('imageCount') : '') +
                         (note.system ? ' · ' + t('autoMaintained') : '') +
-                        (note.sharedFrom ? ' · ' + t('importedShare') : ''),
+                        (hasAlongReleaseSync(note) ? ' · ' + t('releaseSync') :
+                          note.sharedFrom ? ' · ' + t('importedShare') : ''),
                     ),
                   ),
                 ),
@@ -5155,7 +5181,14 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsh-notes-editor-head' },
-                selected.sharedFrom
+                hasAlongReleaseSync(selected)
+                  ? h(
+                      'div',
+                      { className: 'dsh-notes-origin' },
+                      h('span', { className: 'dsh-notes-origin-badge' }, t('releaseSync')),
+                      h('span', null, t('releaseSyncSource')),
+                    )
+                  : selected.sharedFrom
                   ? h(
                       'div',
                       { className: 'dsh-notes-origin' },
